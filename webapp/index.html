@@ -49,13 +49,20 @@
 <div id="app">
   <h1>PocketBlaster コントローラー</h1>
   <div id="status">未接続</div>
-  <details id="axisSettings">
-    <summary>持ち方の設定（上下左右が合わない時に調整）</summary>
+  <details id="axisSettings" open>
+    <summary>持ち方の設定（接続中でも変更可。変更後は「リロード」で基準をリセット）</summary>
     <div class="row">
-      <label for="verticalAxisSelect">上下方向として使うセンサー軸</label>
+      <label for="verticalAxisSelect">上下方向</label>
       <select id="verticalAxisSelect">
-        <option value="beta">前後方向の傾き(beta)</option>
-        <option value="gamma">左右方向の傾き(gamma)</option>
+        <option value="beta">前後の傾き(beta)</option>
+        <option value="gamma">左右の傾き(gamma)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="horizontalAxisSelect">左右方向</label>
+      <select id="horizontalAxisSelect">
+        <option value="gamma">左右の傾き(gamma)</option>
+        <option value="alpha">水平方向の回転(alpha)</option>
       </select>
     </div>
     <div class="row">
@@ -80,6 +87,7 @@
   var reloadBtn = document.getElementById('reloadBtn');
   var rawEl = document.getElementById('raw');
   var verticalAxisSelect = document.getElementById('verticalAxisSelect');
+  var horizontalAxisSelect = document.getElementById('horizontalAxisSelect');
   var invertVerticalCheckbox = document.getElementById('invertVertical');
   var invertHorizontalCheckbox = document.getElementById('invertHorizontal');
 
@@ -87,16 +95,21 @@
   var lastSentAt = 0;
   var sendIntervalMs = 50; // 約20Hz。送りすぎるとWebSocketフレームが詰まるため間引く
 
-  // 持ち方(銃のように構える角度)によって、実際の上下左右の動きがbeta/gammaの
-  // どちらに出るか・符号がどちらかが変わる(DeviceOrientationEventは端末自身の
-  // 持ち方ではなく固定された基準に対する角度のため)。ここで吸収し、Unity側には
-  // 常に「betaが上下、gammaが左右」として送る — Unity側の変更を不要にするため。
+  // 持ち方(銃のように構える角度)によって、実際の上下左右の動きがalpha/beta/gammaの
+  // どれに・どの符号で出るかが変わる(DeviceOrientationEventは端末自身の持ち方ではなく
+  // 固定された基準に対する角度のため)。ここで吸収し、Unity側には常に「betaが上下、
+  // gammaが左右」として送る — Unity側の変更を不要にするため。
+  // 「左右」はスマホを傾ける(gamma)だけでなく、スマホ自体を水平に回転させる(alpha、
+  // 銃口を横に振るイメージ)でも選べるようにしてある。
+  // 設定は接続中でも変更できる(即座に反映される) — 変更後は基準がずれるので
+  // 「リロード」を押して構え直すことを想定している。
   var AXIS_SETTINGS_KEY = 'pocketblaster.axisSettings';
 
   function loadAxisSettings() {
     try {
       var saved = JSON.parse(localStorage.getItem(AXIS_SETTINGS_KEY) || '{}');
       verticalAxisSelect.value = saved.verticalAxis === 'gamma' ? 'gamma' : 'beta';
+      horizontalAxisSelect.value = saved.horizontalAxis === 'alpha' ? 'alpha' : 'gamma';
       invertVerticalCheckbox.checked = !!saved.invertVertical;
       invertHorizontalCheckbox.checked = !!saved.invertHorizontal;
     } catch (e) { /* 保存内容が壊れていたら既定値のまま使う */ }
@@ -106,21 +119,22 @@
     try {
       localStorage.setItem(AXIS_SETTINGS_KEY, JSON.stringify({
         verticalAxis: verticalAxisSelect.value,
+        horizontalAxis: horizontalAxisSelect.value,
         invertVertical: invertVerticalCheckbox.checked,
         invertHorizontal: invertHorizontalCheckbox.checked
       }));
     } catch (e) { /* 保存できなくても致命的ではない */ }
   }
 
-  function remapOrientation(rawBeta, rawGamma) {
+  function remapOrientation(rawAlpha, rawBeta, rawGamma) {
     var verticalRaw = verticalAxisSelect.value === 'gamma' ? rawGamma : rawBeta;
-    var horizontalRaw = verticalAxisSelect.value === 'gamma' ? rawBeta : rawGamma;
+    var horizontalRaw = horizontalAxisSelect.value === 'alpha' ? rawAlpha : rawGamma;
     var vertical = invertVerticalCheckbox.checked ? -verticalRaw : verticalRaw;
     var horizontal = invertHorizontalCheckbox.checked ? -horizontalRaw : horizontalRaw;
     return { beta: vertical, gamma: horizontal };
   }
 
-  [verticalAxisSelect, invertVerticalCheckbox, invertHorizontalCheckbox].forEach(function (el) {
+  [verticalAxisSelect, horizontalAxisSelect, invertVerticalCheckbox, invertHorizontalCheckbox].forEach(function (el) {
     el.addEventListener('change', saveAxisSettings);
   });
   loadAxisSettings();
@@ -139,17 +153,11 @@
       setStatus('接続済み\n' + url, 'connected');
       shootBtn.disabled = false;
       reloadBtn.disabled = false;
-      verticalAxisSelect.disabled = true;
-      invertVerticalCheckbox.disabled = true;
-      invertHorizontalCheckbox.disabled = true;
     };
     ws.onclose = function () {
       setStatus('切断されました。もう一度「接続する」を押してください', 'error');
       shootBtn.disabled = true;
       reloadBtn.disabled = true;
-      verticalAxisSelect.disabled = false;
-      invertVerticalCheckbox.disabled = false;
-      invertHorizontalCheckbox.disabled = false;
     };
     ws.onerror = function () {
       setStatus('接続エラー。PCと同じWi-Fiに接続しているか確認してください', 'error');
@@ -165,13 +173,14 @@
   }
 
   function onDeviceOrientation(e) {
+    var rawAlpha = e.alpha || 0;
     var rawBeta = e.beta || 0;
     var rawGamma = e.gamma || 0;
-    rawEl.textContent = 'alpha=' + (e.alpha || 0).toFixed(1) +
+    rawEl.textContent = 'alpha=' + rawAlpha.toFixed(1) +
       ' beta=' + rawBeta.toFixed(1) +
       ' gamma=' + rawGamma.toFixed(1);
-    var remapped = remapOrientation(rawBeta, rawGamma);
-    sendOrientation(e.alpha, remapped.beta, remapped.gamma);
+    var remapped = remapOrientation(rawAlpha, rawBeta, rawGamma);
+    sendOrientation(rawAlpha, remapped.beta, remapped.gamma);
   }
 
   function startOrientationStream() {

@@ -96,8 +96,11 @@ namespace PocketBlaster.Aim
             _timeSinceReload += Time.deltaTime;
             if (_emptyClickFlashTimer > 0f) _emptyClickFlashTimer -= Time.deltaTime;
 
-            var betaDelta = _server.LatestBeta - _refBeta;
-            var gammaDelta = _server.LatestGamma - _refGamma;
+            // Mathf.DeltaAngleで0/360境界をまたぐ回転(スマホの向き=alphaをwebapp側で
+            // 左右方向に割り当てた場合)でも正しい符号付き差分になるようにする。
+            // beta/gammaは通常この境界をまたがないが、統一しておいて問題はない。
+            var betaDelta = Mathf.DeltaAngle(_refBeta, _server.LatestBeta);
+            var gammaDelta = Mathf.DeltaAngle(_refGamma, _server.LatestGamma);
 
             _offsetX = gammaDelta * degreesToScreenPixels;
             _offsetY = betaDelta * degreesToScreenPixels;
