@@ -4,10 +4,25 @@
 
 ## 現状（2026-09-06）
 
-マイルストーン1〜5（`docs/requirements.md`§4）を実装済み・自動テスト通過。**実機（iPhone
-Safari）からスマホ→PC間の接続・ジャイロでのレティクル操作は動作確認済み。** ドリフトの実測・
-「撃つ感触」の判断、マイルストーン4（複数ウェーブのステージ）・マイルストーン5（差し替えた
-正式スプライト）の実機確認はまだ行っていない。
+マイルストーン1〜5（`docs/requirements.md`§4）＋§8将来の拡張3項目を実装済み・自動テスト
+通過。**実機（iPhone Safari）からスマホ→PC間の接続・ジャイロでのレティクル操作は動作確認済み。**
+ドリフトの実測・「撃つ感触」の判断、マイルストーン4以降（複数ウェーブ・スプライト・移動・
+リロードジェスチャー・スコア/ボス戦/難易度モード）の実機確認はまだ行っていない。
+
+**将来の拡張（2026-09-06、実装済み・未検証）**: `docs/requirements.md`§8の3項目すべてに対応。
+- **スコアリング**: 敵を倒すと得点（`Target.PointValue`、通常100・ボス1000）。ステージクリア時に
+  シーン単位のローカルハイスコア（`PlayerPrefs`）と比較・更新して表示。
+- **複数ステージ・ボス戦**: `Stage2_BossRush`（新規、4ウェーブ）を追加。`TargetHitState`に
+  `hitPoints`（既定1）を追加し、1より大きい値で「その回数当てるまで倒れない」ボスを作れる
+  ようにした（`Stage2_BossRush`のパンプキンボスは3発）。**各ステージは独立シーンのままで、
+  クリアしても自動で次のステージへは進まない**（`Milestone1/3/4`と同じ「単体で開いて
+  Play Modeに入れる」方針を優先。docs/requirements.md未決事項#6）。
+- **難易度モード**: スマホ側（接続前）で「アーケード（残機制）」「カジュアル（無制限）」を
+  選択。このゲームには敵からの被弾という概念がまだ無いため、フェールの条件を
+  「狙って撃ってはずした」ことにしている（`GyroReticleController.OnShotResolved`、
+  弾切れの空撃ちはノーカウント）。**この設計判断自体が実機で遊んでみて妥当かどうかは
+  まだ検証していない** — 「はずれで即減点」が窮屈に感じるようなら、ミスの許容回数を
+  増やす・別のフェール条件（時間切れ等）に変える、といった見直しが必要になる可能性がある。
 
 **マイルストーン5（2026-09-06）**: 世界観を「野菜×ゾンビ、倒すとジュースになる」に確定
 （オーナー判断、詳細は`docs/requirements.md`決定済み事項）。3Dモデルの代わりに、House of
@@ -100,9 +115,15 @@ the Dead等の古典的ライトガンゲームで使われる「カメラに正
 - `Assets/Scenes/Milestone4_Stage.unity`: 3ウェーブ(2体→3体→仮の「ボス」1体、奥行きが
   手前に迫る配置)の短いステージ（`Milestone4SceneBuilder`の`-executeMethod`または
   「PocketBlaster > Build Milestone4 Scene」で生成）。
-- `Assets/Tests/EditMode/`: `PhoneOrientationServerTests`・`AmmoStateTests`・
-  `TargetHitStateTests`・`ProceduralSfxTests`・`CertificateDownloadServerTests`・
-  `StageProgressStateTests`で計19件、すべてpass。
+- `Assets/Scripts/Gameplay/PlayerOffsetState.cs`/`PlayerLocomotion.cs`: 足踏み移動
+  （上記参照）。`Assets/Scripts/Gameplay/ScoreState.cs`/`LivesState.cs`/`GameSession.cs`:
+  得点・残機・難易度モード（上記「将来の拡張」参照）。
+- `Assets/Editor/Stage2SceneBuilder.cs` → `Assets/Scenes/Stage2_BossRush.unity`:
+  2本目のステージ（4ウェーブ、3発ヒットのボス）。
+- `Assets/Tests/EditMode/`: 計33件、すべてpass
+  （`PhoneOrientationServerTests`・`AmmoStateTests`・`TargetHitStateTests`・
+  `ProceduralSfxTests`・`CertificateDownloadServerTests`・`StageProgressStateTests`・
+  `PlayerOffsetStateTests`・`ScoreStateTests`・`LivesStateTests`）。
   `run-unity.ps1 -ProjectPath . -ExpectOutput TestResults.xml -UnityArgs
   @('-batchmode','-nographics','-runTests','-testPlatform','EditMode','-testResults',
   'TestResults.xml','-logFile','test_run.log')`で再実行できる。
@@ -174,6 +195,27 @@ Play Modeに入って試す。
      見え方が変わる可能性がある）。
    物足りなければ、カメラの移動を滑らかなレール（スプライン）にする、ウェーブ間に演出
    （フェード等）を挟む、といった改善が次の候補になる。
+4. **スコアの検証**: 敵を倒すたびに画面右上のスコアが増えるか、ステージクリア時に
+   「ハイスコア更新！」（初回は必ずこれになる）または「スコア: N（ハイスコア: M）」の
+   どちらかが表示されるか確認する。もう一度同じシーンをPlay Modeで実行し、前回より
+   低い点でクリアした場合に「ハイスコア更新！」にならないことも確認する。
+
+## `Stage2_BossRush`での確認（まだ誰もやっていない）
+
+`Milestone3_ShootTarget`と同じ接続手順（上記1〜4）の後、`Stage2_BossRush`シーンで
+Play Modeに入って試す。
+
+1. 4ウェーブを順に進み、最後のパンプキンボスに3発当てるまで倒れないことを確認する。
+   1〜2発目は白くフラッシュするだけでまた狙える状態に戻り、3発目でようやく倒れ込む
+   （見た目で「ダメージを与えている」ことが伝わるかが判断ポイント）。
+2. クリア後のスコアが1000点以上（ボスの得点分）増えているか確認する。
+3. **難易度モードの検証**: 接続前の「難易度モード」で「アーケード」を選んで接続する。
+   画面左下に「モード: アーケード　残機: 3」と出るか確認する。わざと狙いを外して「撃つ」を
+   3回行い、残機が減って0になったら「ゲームオーバー」表示になり、それ以上撃てなくなるか
+   確認する。「カジュアル」を選んだ場合は何回はずしても残機表示が変わらないことも確認する。
+   - **一番大事な判断**: 「はずれで残機が減る」という難易度設計が、実際に遊んでみて
+     楽しい緊張感になっているか、それとも単に窮屈でストレスなだけか。後者なら
+     フェール条件そのものを見直す（許容ミス回数を増やす、時間切れ制にする等）。
 
 うまくいかない場合にまず疑うところ:
 - 新しいポートを足した場合、`scripts/check-port-firewall.ps1 -Port <port>`（`~/AIFiles/`）で
