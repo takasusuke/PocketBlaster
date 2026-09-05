@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>PocketBlaster コントローラー</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #0b0b12; color: #eee;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-user-select: none; user-select: none;
+    touch-action: manipulation;
+  }
+  #app {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 20px; padding: 16px; box-sizing: border-box; text-align: center;
+  }
+  h1 { font-size: 20px; margin: 0 0 8px; font-weight: 600; }
+  #status {
+    font-size: 15px; line-height: 1.6; white-space: pre-wrap;
+    background: #16161f; border-radius: 12px; padding: 12px 16px; width: 100%; max-width: 360px;
+    box-sizing: border-box;
+  }
+  #status.connected { color: #7CFFB2; }
+  #status.error { color: #FF8A8A; }
+  button {
+    font-size: 18px; padding: 16px 28px; border-radius: 14px; border: none;
+    width: 100%; max-width: 360px; box-sizing: border-box;
+  }
+  #connectBtn { background: #4C6FFF; color: white; }
+  #connectBtn:disabled { background: #333; color: #888; }
+  #reloadBtn { background: #FF7A45; color: white; }
+  #reloadBtn:disabled { background: #333; color: #888; }
+  #raw { font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>PocketBlaster コントローラー</h1>
+  <div id="status">未接続</div>
+  <button id="connectBtn">接続する</button>
+  <button id="reloadBtn" disabled>リロード（狙いを基準位置にリセット）</button>
+  <div id="raw"></div>
+</div>
+<script>
+(function () {
+  var statusEl = document.getElementById('status');
+  var connectBtn = document.getElementById('connectBtn');
+  var reloadBtn = document.getElementById('reloadBtn');
+  var rawEl = document.getElementById('raw');
+
+  var ws = null;
+  var lastSentAt = 0;
+  var sendIntervalMs = 50; // 約20Hz。送りすぎるとWebSocketフレームが詰まるため間引く
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = cls || '';
+  }
+
+  function connectWebSocket() {
+    var url = 'ws://' + location.host + '/';
+    ws = new WebSocket(url);
+
+    ws.onopen = function () {
+      setStatus('接続済み\n' + url, 'connected');
+      reloadBtn.disabled = false;
+    };
+    ws.onclose = function () {
+      setStatus('切断されました。もう一度「接続する」を押してください', 'error');
+      reloadBtn.disabled = true;
+    };
+    ws.onerror = function () {
+      setStatus('接続エラー。PCと同じWi-Fiに接続しているか確認してください', 'error');
+    };
+  }
+
+  function sendOrientation(alpha, beta, gamma) {
+    var now = Date.now();
+    if (now - lastSentAt < sendIntervalMs) return;
+    lastSentAt = now;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'orientation', alpha: alpha || 0, beta: beta || 0, gamma: gamma || 0 }));
+  }
+
+  function onDeviceOrientation(e) {
+    rawEl.textContent = 'alpha=' + (e.alpha || 0).toFixed(1) +
+      ' beta=' + (e.beta || 0).toFixed(1) +
+      ' gamma=' + (e.gamma || 0).toFixed(1);
+    sendOrientation(e.alpha, e.beta, e.gamma);
+  }
+
+  function startOrientationStream() {
+    window.addEventListener('deviceorientation', onDeviceOrientation);
+  }
+
+  function requestOrientationPermissionIfNeeded() {
+    // iOS Safariはユーザー操作起点でのみ許可を要求できる
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      return DeviceOrientationEvent.requestPermission().then(function (result) {
+        if (result !== 'granted') {
+          throw new Error('センサーの利用が許可されませんでした');
+        }
+      });
+    }
+    return Promise.resolve();
+  }
+
+  function requestWakeLockBestEffort() {
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(function () { /* 失敗しても無視してよい */ });
+    }
+  }
+
+  connectBtn.addEventListener('click', function () {
+    connectBtn.disabled = true;
+    setStatus('接続中...');
+    requestOrientationPermissionIfNeeded()
+      .then(function () {
+        requestWakeLockBestEffort();
+        startOrientationStream();
+        connectWebSocket();
+      })
+      .catch(function (err) {
+        setStatus(String(err.message || err), 'error');
+        connectBtn.disabled = false;
+      });
+  });
+
+  reloadBtn.addEventListener('click', function () {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'reload' }));
+  });
+})();
+</script>
+</body>
+</html>
