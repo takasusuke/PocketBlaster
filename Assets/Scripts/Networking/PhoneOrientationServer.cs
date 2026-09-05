@@ -2,8 +2,11 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using UnityEngine;
@@ -11,10 +14,16 @@ using UnityEngine;
 namespace PocketBlaster.Networking
 {
     /// <summary>
-    /// 生のTCPソケット上に最小限のHTTP(静的ファイル配信)とRFC6455 WebSocketサーバーを
+    /// 生のTCPソケット上に最小限のHTTPS(静的ファイル配信)とRFC6455 WebSocket(wss)サーバーを
     /// 実装したもの。外部ライブラリなしでスマホのブラウザ(webapp/index.html)から
     /// ジャイロ値を受け取るために書いている。UnityのMonoBehaviourには依存しない
     /// (PhoneControllerServerがラップする)ので、Editor上のバッチ実行からも直接叩ける。
+    ///
+    /// TLS必須にしているのは、iOS Safari(および多くの最新ブラウザ)が「セキュアな
+    /// コンテキスト(https)」でないとDeviceOrientationEventのセンサー値を一切渡さない
+    /// ため — 同一Wi-Fi内のLAN IPへのhttp://では、権限ダイアログすら出ずに黙って
+    /// 動かない(2026-09-05に実機で確認)。証明書は自己署名で、OSの証明書ストアには
+    /// 触れずプロセス内だけで完結させている(SelfSignedCertificate参照)。
     /// </summary>
     public sealed class PhoneOrientationServer
     {
@@ -31,6 +40,7 @@ namespace PocketBlaster.Networking
 
         private readonly int _port;
         private readonly string _indexHtmlPath;
+        private readonly X509Certificate2 _serverCertificate;
         private readonly ConcurrentQueue<InboundMessage> _inbox = new ConcurrentQueue<InboundMessage>();
         private TcpListener _listener;
         private Thread _acceptThread;
@@ -39,10 +49,11 @@ namespace PocketBlaster.Networking
 
         public bool IsClientConnected => _clientConnected;
 
-        public PhoneOrientationServer(int port, string indexHtmlPath)
+        public PhoneOrientationServer(int port, string indexHtmlPath, X509Certificate2 serverCertificate)
         {
             _port = port;
             _indexHtmlPath = indexHtmlPath;
+            _serverCertificate = serverCertificate;
         }
 
         public void Start()
@@ -89,8 +100,16 @@ namespace PocketBlaster.Networking
             try
             {
                 using (client)
-                using (var stream = client.GetStream())
+                using (var rawStream = client.GetStream())
+                using (var sslStream = new SslStream(rawStream, leaveInnerStreamOpen: false))
                 {
+                    // SslProtocols.Noneを指定すると、明示的なバージョン列挙に依存せず
+                    // OS(Windowsの場合SChannel)がクライアントと合意できる最良のTLSバージョンを
+                    // 選ぶ。ここで個別にTls12等を指定すると、ランタイムのAPI互換レベルによっては
+                    // 新しいバージョン(Tls13)の列挙値自体が存在せずコンパイルエラーになる。
+                    sslStream.AuthenticateAsServer(_serverCertificate, false, SslProtocols.None, false);
+                    Stream stream = sslStream;
+
                     var headers = ReadHttpHeaders(stream, out _);
                     if (headers == null) return;
 
@@ -124,7 +143,7 @@ namespace PocketBlaster.Networking
             }
         }
 
-        private static System.Collections.Generic.Dictionary<string, string> ReadHttpHeaders(NetworkStream stream, out string requestLine)
+        private static System.Collections.Generic.Dictionary<string, string> ReadHttpHeaders(Stream stream, out string requestLine)
         {
             requestLine = null;
             var headers = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -177,7 +196,7 @@ namespace PocketBlaster.Networking
                    value.IndexOf(expectedValue, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private void ServeStaticHtml(NetworkStream stream)
+        private void ServeStaticHtml(Stream stream)
         {
             string body;
             try
@@ -200,7 +219,7 @@ namespace PocketBlaster.Networking
             stream.Flush();
         }
 
-        private static void CompleteHandshake(NetworkStream stream, string clientKey)
+        private static void CompleteHandshake(Stream stream, string clientKey)
         {
             using var sha1 = SHA1.Create();
             var combined = clientKey + WebSocketMagicString;
@@ -216,7 +235,7 @@ namespace PocketBlaster.Networking
             stream.Flush();
         }
 
-        private void ReadFrameLoop(NetworkStream stream)
+        private void ReadFrameLoop(Stream stream)
         {
             while (_running)
             {
@@ -256,7 +275,7 @@ namespace PocketBlaster.Networking
             }
         }
 
-        private static byte[] ReadOneFrame(NetworkStream stream, out byte opcode)
+        private static byte[] ReadOneFrame(Stream stream, out byte opcode)
         {
             opcode = 0;
             var header = ReadExact(stream, 2);
@@ -301,7 +320,7 @@ namespace PocketBlaster.Networking
             return payload;
         }
 
-        private static void SendFrame(NetworkStream stream, byte opcode, byte[] payload)
+        private static void SendFrame(Stream stream, byte opcode, byte[] payload)
         {
             // サーバーからクライアントへ送るフレームはRFC6455によりマスクしない。
             var len = payload.Length;
@@ -330,7 +349,7 @@ namespace PocketBlaster.Networking
             stream.Flush();
         }
 
-        private static byte[] ReadExact(NetworkStream stream, int count)
+        private static byte[] ReadExact(Stream stream, int count)
         {
             var buffer = new byte[count];
             var offset = 0;

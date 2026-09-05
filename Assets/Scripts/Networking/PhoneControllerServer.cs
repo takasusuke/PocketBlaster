@@ -1,16 +1,22 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using UnityEngine;
 
 namespace PocketBlaster.Networking
 {
     /// <summary>
     /// PhoneOrientationServer(生のTCP/WebSocket実装)をシーンに置くための薄いラッパー。
-    /// スマホのブラウザ(webapp/index.html)が同一Wi-Fi内から http://&lt;このPCのIP&gt;:port/
+    /// スマホのブラウザ(webapp/index.html)が同一Wi-Fi内から https://&lt;このPCのIP&gt;:port/
     /// を開くと、このスクリプトがページを配信し、続けて開かれるWebSocket接続から
     /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")を受け取る。
+    ///
+    /// httpsなのはiOS Safari等がhttpではDeviceOrientationEventを渡さないため
+    /// (PhoneOrientationServer参照)。証明書は自己署名なので、スマホ側で初回に
+    /// 「信頼して進む」操作が必要になる — LogConnectionInfoでその旨も案内する。
     /// </summary>
     public class PhoneControllerServer : MonoBehaviour
     {
@@ -30,10 +36,23 @@ namespace PocketBlaster.Networking
 
         private void Awake()
         {
+            var projectRoot = Path.Combine(Application.dataPath, "..");
+            X509Certificate2 certificate;
+            try
+            {
+                certificate = DevCertificate.LoadOrGenerate(projectRoot);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[PhoneControllerServer] 開発用証明書の準備に失敗したため起動しません: {ex.Message}");
+                enabled = false;
+                return;
+            }
+
             var indexHtmlPath = Path.Combine(Application.dataPath, "..", "webapp", "index.html");
-            _server = new PhoneOrientationServer(port, indexHtmlPath);
+            _server = new PhoneOrientationServer(port, indexHtmlPath, certificate);
             _server.Start();
-            LogConnectionInfo();
+            LogConnectionInfo(GetLocalIPv4Addresses());
         }
 
         private void Update()
@@ -67,10 +86,9 @@ namespace PocketBlaster.Networking
             _server?.Stop();
         }
 
-        private void LogConnectionInfo()
+        private static List<IPAddress> GetLocalIPv4Addresses()
         {
-            Debug.Log($"[PhoneControllerServer] port {port} で待ち受け中。" +
-                      $"スマホのブラウザで以下のいずれかを開いてください:");
+            var result = new List<IPAddress>();
             try
             {
                 var host = Dns.GetHostEntry(Dns.GetHostName());
@@ -78,13 +96,26 @@ namespace PocketBlaster.Networking
                 {
                     if (addr.AddressFamily == AddressFamily.InterNetwork)
                     {
-                        Debug.Log($"  http://{addr}:{port}/");
+                        result.Add(addr);
                     }
                 }
             }
             catch (Exception ex)
             {
                 Debug.LogWarning($"[PhoneControllerServer] ローカルIPの取得に失敗: {ex.Message}");
+            }
+            return result;
+        }
+
+        private void LogConnectionInfo(List<IPAddress> localIps)
+        {
+            Debug.Log($"[PhoneControllerServer] port {port} で待ち受け中。" +
+                      "スマホのブラウザで以下のいずれかを開いてください " +
+                      "(自己署名証明書のため、初回は「安全でない接続」の警告を" +
+                      "手動で許可して進む必要があります):");
+            foreach (var addr in localIps)
+            {
+                Debug.Log($"  https://{addr}:{port}/");
             }
         }
     }

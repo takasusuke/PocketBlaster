@@ -64,7 +64,8 @@
   }
 
   function connectWebSocket() {
-    var url = 'ws://' + location.host + '/';
+    var scheme = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    var url = scheme + location.host + '/';
     ws = new WebSocket(url);
 
     ws.onopen = function () {

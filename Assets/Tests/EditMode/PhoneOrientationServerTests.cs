@@ -1,17 +1,22 @@
 using System;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using NUnit.Framework;
 using PocketBlaster.Networking;
+using UnityEngine;
 
 namespace PocketBlaster.Tests.EditMode
 {
     /// <summary>
-    /// PhoneOrientationServer(手書きのHTTP/WebSocket実装)を、実機のスマホ無しで検証する。
-    /// テスト自身が「スマホのブラウザ」役としてTCP接続→WSハンドシェイク→マスク付き
-    /// テキストフレーム送信を行い、サーバー側が正しくハンドシェイクとJSONを処理できるかを見る。
+    /// PhoneOrientationServer(手書きのHTTPS/WebSocket(wss)実装)を、実機のスマホ無しで検証する。
+    /// テスト自身が「スマホのブラウザ」役としてTCP接続→TLSハンドシェイク→WSハンドシェイク→
+    /// マスク付きテキストフレーム送信を行い、サーバー側が正しく処理できるかを見る。
+    /// サーバーは自己署名証明書を使うため、テスト側の証明書検証は常に受理するようにしている
+    /// (スマホのブラウザで「信頼して進む」を押すのと同じ扱い)。
     /// </summary>
     public class PhoneOrientationServerTests
     {
@@ -23,14 +28,15 @@ namespace PocketBlaster.Tests.EditMode
             var indexHtmlPath = Path.GetTempFileName();
             File.WriteAllText(indexHtmlPath, "<html></html>");
 
-            var server = new PhoneOrientationServer(TestPort, indexHtmlPath);
+            var certificate = TestCertificate();
+            var server = new PhoneOrientationServer(TestPort, indexHtmlPath, certificate);
             server.Start();
             try
             {
                 using (var client = new TcpClient())
                 {
                     client.Connect("127.0.0.1", TestPort);
-                    using (var stream = client.GetStream())
+                    using (var stream = ConnectTls(client))
                     {
                         PerformHandshake(stream);
 
@@ -66,14 +72,15 @@ namespace PocketBlaster.Tests.EditMode
             const string marker = "<html>POCKETBLASTER_TEST_MARKER</html>";
             File.WriteAllText(indexHtmlPath, marker);
 
-            var server = new PhoneOrientationServer(TestPort + 1, indexHtmlPath);
+            var certificate = TestCertificate();
+            var server = new PhoneOrientationServer(TestPort + 1, indexHtmlPath, certificate);
             server.Start();
             try
             {
                 using (var client = new TcpClient())
                 {
                     client.Connect("127.0.0.1", TestPort + 1);
-                    using (var stream = client.GetStream())
+                    using (var stream = ConnectTls(client))
                     {
                         var request = "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
                         var requestBytes = Encoding.ASCII.GetBytes(request);
@@ -93,7 +100,21 @@ namespace PocketBlaster.Tests.EditMode
             }
         }
 
-        private static string ReadUntilConnectionClosed(NetworkStream stream)
+        private static X509Certificate2 TestCertificate()
+        {
+            var projectRoot = Path.Combine(Application.dataPath, "..");
+            return DevCertificate.LoadOrGenerate(projectRoot);
+        }
+
+        private static SslStream ConnectTls(TcpClient client)
+        {
+            var sslStream = new SslStream(client.GetStream(), false,
+                (sender, cert, chain, errors) => true); // 自己署名なので常に受理する(スマホでの「信頼して進む」相当)
+            sslStream.AuthenticateAsClient("127.0.0.1");
+            return sslStream;
+        }
+
+        private static string ReadUntilConnectionClosed(Stream stream)
         {
             using var ms = new MemoryStream();
             var buffer = new byte[4096];
@@ -120,7 +141,7 @@ namespace PocketBlaster.Tests.EditMode
             return default;
         }
 
-        private static void PerformHandshake(NetworkStream stream)
+        private static void PerformHandshake(Stream stream)
         {
             var key = Convert.ToBase64String(Encoding.UTF8.GetBytes("test-key-0123456"));
             var request =
@@ -139,7 +160,7 @@ namespace PocketBlaster.Tests.EditMode
             Assert.IsTrue(response.Contains("101"), "ハンドシェイクに失敗: " + response);
         }
 
-        private static void SendTextFrame(NetworkStream stream, string json)
+        private static void SendTextFrame(Stream stream, string json)
         {
             var payload = Encoding.UTF8.GetBytes(json);
             var maskKey = new byte[] { 0x12, 0x34, 0x56, 0x78 };

@@ -7,7 +7,7 @@
 /Logs/
 /UserSettings/
 /MemoryCaptures/
-*.csproj
+/*.csproj
 *.sln
 *.userprefs
 *.pidb
@@ -20,6 +20,11 @@
 # Web companion (phone controller)
 /webapp/node_modules/
 /webapp/dist/
+
+# Local dev TLS certificate (machine/network-specific, generated on demand)
+/dev-cert.pfx
+/tools/gen-dev-cert/bin/
+/tools/gen-dev-cert/obj/
 
 # OS
 .DS_Store
