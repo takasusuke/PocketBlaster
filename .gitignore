@@ -1,0 +1,26 @@
+# Unity
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Builds/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+*.csproj
+*.sln
+*.userprefs
+*.pidb
+*.suo
+*.user
+*.unityproj
+.vs/
+.vscode/
+
+# Web companion (phone controller)
+/webapp/node_modules/
+/webapp/dist/
+
+# OS
+.DS_Store
+Thumbs.db
