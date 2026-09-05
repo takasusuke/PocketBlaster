@@ -18,10 +18,26 @@ namespace PocketBlaster.EditorTools
     {
         private const string ScenePath = "Assets/Scenes/Milestone4_Stage.unity";
 
+        private const string TomatoSpritePath = "Assets/Art/Enemies/tomato_zombie.png";
+        private const string CarrotSpritePath = "Assets/Art/Enemies/carrot_zombie.png";
+        private const string OnionSpritePath = "Assets/Art/Enemies/onion_zombie.png";
+        private const string PumpkinBossSpritePath = "Assets/Art/Enemies/pumpkin_zombie_boss.png";
+
+        private static readonly Color TomatoJuice = new Color(0.9f, 0.15f, 0.1f);
+        private static readonly Color CarrotJuice = new Color(0.95f, 0.55f, 0.1f);
+        private static readonly Color OnionJuice = new Color(0.85f, 0.8f, 0.9f);
+        private static readonly Color PumpkinJuice = new Color(0.9f, 0.45f, 0.05f);
+
         [MenuItem("PocketBlaster/Build Milestone4 Scene")]
         public static void Build()
         {
+            AssetDatabase.Refresh();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+            var tomatoSprite = EnemyFactory.LoadSpriteOrPlaceholder(TomatoSpritePath);
+            var carrotSprite = EnemyFactory.LoadSpriteOrPlaceholder(CarrotSpritePath);
+            var onionSprite = EnemyFactory.LoadSpriteOrPlaceholder(OnionSpritePath);
+            var pumpkinSprite = EnemyFactory.LoadSpriteOrPlaceholder(PumpkinBossSpritePath);
 
             var wave1Waypoint = CreateWaypoint("Waypoint_Wave1", new Vector3(0f, 1.6f, 0f));
             var wave2Waypoint = CreateWaypoint("Waypoint_Wave2", new Vector3(0f, 1.6f, 1f));
@@ -44,20 +60,20 @@ namespace PocketBlaster.EditorTools
 
             var wave1Enemies = new[]
             {
-                CreateEnemy("Wave1_Enemy_L", new Vector3(-2f, 1.6f, 8f), Color.red, 1f, respawns: false),
-                CreateEnemy("Wave1_Enemy_R", new Vector3(2f, 1.6f, 8f), Color.red, 1f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-2f, 1.6f, 8f), tomatoSprite, TomatoJuice, 2f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave1_Carrot_R", new Vector3(2f, 1.6f, 8f), carrotSprite, CarrotJuice, 2f, respawns: false),
             };
 
             var wave2Enemies = new[]
             {
-                CreateEnemy("Wave2_Enemy_L", new Vector3(-3f, 1.6f, 7f), new Color(0.9f, 0.5f, 0.1f), 1f, respawns: false),
-                CreateEnemy("Wave2_Enemy_C", new Vector3(0f, 1.6f, 7.5f), new Color(0.9f, 0.5f, 0.1f), 1f, respawns: false),
-                CreateEnemy("Wave2_Enemy_R", new Vector3(3f, 1.6f, 7f), new Color(0.9f, 0.5f, 0.1f), 1f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave2_Tomato_L", new Vector3(-3f, 1.6f, 7f), tomatoSprite, TomatoJuice, 2f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 7.5f), onionSprite, OnionJuice, 2f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(3f, 1.6f, 7f), carrotSprite, CarrotJuice, 2f, respawns: false),
             };
 
             var wave3Enemies = new[]
             {
-                CreateEnemy("Wave3_Finale", new Vector3(0f, 1.8f, 6f), new Color(0.5f, 0.1f, 0.6f), 1.5f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave3_PumpkinBoss", new Vector3(0f, 2f, 6f), pumpkinSprite, PumpkinJuice, 3.5f, respawns: false),
             };
 
             var rigGo = new GameObject("GyroAimTestRig");
@@ -93,24 +109,6 @@ namespace PocketBlaster.EditorTools
             go.transform.position = position;
             go.transform.rotation = Quaternion.identity;
             return go.transform;
-        }
-
-        private static Target CreateEnemy(string name, Vector3 position, Color color, float scale, bool respawns)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            go.name = name;
-            go.transform.position = position;
-            go.transform.localScale = Vector3.one * scale;
-
-            var renderer = go.GetComponent<Renderer>();
-            renderer.sharedMaterial = new Material(renderer.sharedMaterial) { color = color };
-
-            var target = go.AddComponent<Target>();
-            var so = new SerializedObject(target);
-            so.FindProperty("respawnsAfterDefeat").boolValue = respawns;
-            so.ApplyModifiedPropertiesWithoutUndo();
-
-            return target;
         }
 
         private static void SetWave(SerializedProperty waveProp, Transform waypoint, Target[] enemies)

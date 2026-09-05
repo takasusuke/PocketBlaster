@@ -3,26 +3,34 @@ using UnityEngine;
 namespace PocketBlaster.Gameplay
 {
     /// <summary>
-    /// マイルストーン3用の固定的な仮の敵。見た目はプリミティブのプレースホルダーで、
-    /// 「撃った時の感触」(着弾フィードバック・敵の反応、docs/requirements.md §2 体験の核)を
-    /// 検証するためだけの最小実装。本番のアート・モチーフは未決(同ファイル未決事項#2)。
+    /// 固定的な敵(野菜ゾンビ、docs/requirements.md 決定済み事項)。「撃った時の感触」
+    /// (着弾フィードバック・敵の反応、同ファイル §2 体験の核)を担う。見た目は3Dモデルでは
+    /// なく、カメラに正対するスプライト(Billboard参照、House of the Dead等の古典的手法)。
     /// 時間経過の状態遷移はTargetHitStateに任せ、ここでは見た目への反映だけを行う。
+    ///
+    /// 倒れ込みの回転は`visualTransform`(未設定ならこのGameObject自身)に対して行う —
+    /// BillboardがこのGameObject自体の向きを毎フレームカメラ側へ強制するため、同じ
+    /// Transformへ倒れ込み角度を適用すると上書きされて消えてしまう。スプライト構成では
+    /// 子オブジェクト(Visual)側にSpriteRendererと倒れ込みを持たせ、ルート側はBillboardと
+    /// コライダーだけを持つ。
     /// </summary>
-    [RequireComponent(typeof(Renderer))]
     public class Target : MonoBehaviour
     {
+        [SerializeField] private Transform visualTransform;
         [SerializeField] private float flashDurationSeconds = 0.08f;
         [SerializeField] private float knockDurationSeconds = 0.25f;
         [SerializeField] private float downDurationSeconds = 1.2f;
         [SerializeField] private Color hitFlashColor = Color.white;
         [SerializeField] private float knockbackAngleDegrees = 70f;
         [SerializeField] private bool respawnsAfterDefeat = true;
+        [SerializeField] private Color juiceColor = Color.red;
 
         /// <summary>撃たれるたびに呼ばれる(復帰する場合も含む)</summary>
         public event System.Action OnHit;
         /// <summary>倒された後に復帰しない設定(respawnsAfterDefeat=false)の時、退場が確定した瞬間に1回だけ呼ばれる</summary>
         public event System.Action OnDefeated;
 
+        private Transform _visual;
         private Renderer _renderer;
         private Collider _collider;
         private Color _baseColor;
@@ -35,10 +43,11 @@ namespace PocketBlaster.Gameplay
 
         private void Awake()
         {
-            _renderer = GetComponent<Renderer>();
+            _visual = visualTransform != null ? visualTransform : transform;
+            _renderer = GetComponentInChildren<Renderer>();
             _collider = GetComponent<Collider>();
             _baseColor = _renderer.material.color;
-            _baseRotation = transform.localRotation;
+            _baseRotation = _visual.localRotation;
             _knockedRotation = _baseRotation * Quaternion.Euler(knockbackAngleDegrees, 0f, 0f);
             _state = new TargetHitState(flashDurationSeconds, knockDurationSeconds, downDurationSeconds, respawnsAfterDefeat);
         }
@@ -48,6 +57,7 @@ namespace PocketBlaster.Gameplay
             if (_state.TryHit())
             {
                 OnHit?.Invoke();
+                JuiceSplashEffect.SpawnAt(transform.position, juiceColor);
             }
         }
 
@@ -71,21 +81,21 @@ namespace PocketBlaster.Gameplay
             {
                 case TargetHitState.Phase.Idle:
                     _renderer.material.color = _baseColor;
-                    transform.localRotation = _baseRotation;
+                    _visual.localRotation = _baseRotation;
                     break;
                 case TargetHitState.Phase.Flash:
                     _renderer.material.color = hitFlashColor;
-                    transform.localRotation = _baseRotation;
+                    _visual.localRotation = _baseRotation;
                     break;
                 case TargetHitState.Phase.KnockDown:
                     _renderer.material.color = _baseColor;
-                    transform.localRotation = Quaternion.Slerp(_baseRotation, _knockedRotation, _state.PhaseProgress01);
+                    _visual.localRotation = Quaternion.Slerp(_baseRotation, _knockedRotation, _state.PhaseProgress01);
                     break;
                 case TargetHitState.Phase.Down:
-                    transform.localRotation = _knockedRotation;
+                    _visual.localRotation = _knockedRotation;
                     break;
                 case TargetHitState.Phase.RecoverUp:
-                    transform.localRotation = Quaternion.Slerp(_knockedRotation, _baseRotation, _state.PhaseProgress01);
+                    _visual.localRotation = Quaternion.Slerp(_knockedRotation, _baseRotation, _state.PhaseProgress01);
                     break;
             }
         }

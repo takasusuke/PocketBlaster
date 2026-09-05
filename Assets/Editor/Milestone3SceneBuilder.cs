@@ -1,6 +1,5 @@
 using System.IO;
 using PocketBlaster.Aim;
-using PocketBlaster.Gameplay;
 using PocketBlaster.Networking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -19,9 +18,12 @@ namespace PocketBlaster.EditorTools
     {
         private const string ScenePath = "Assets/Scenes/Milestone3_ShootTarget.unity";
 
+        private const string TomatoSpritePath = "Assets/Art/Enemies/tomato_zombie.png";
+
         [MenuItem("PocketBlaster/Build Milestone3 Scene")]
         public static void Build()
         {
+            AssetDatabase.Refresh();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             var cameraGo = new GameObject("Main Camera");
@@ -38,15 +40,10 @@ namespace PocketBlaster.EditorTools
             light.intensity = 1.1f;
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
-            var targetGo = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            targetGo.name = "Target_Placeholder";
-            targetGo.transform.position = new Vector3(0f, 1.6f, 8f);
-            var targetRenderer = targetGo.GetComponent<Renderer>();
-            targetRenderer.sharedMaterial = new Material(targetRenderer.sharedMaterial)
-            {
-                color = new Color(0.8f, 0.25f, 0.25f)
-            };
-            targetGo.AddComponent<Target>();
+            var tomatoSprite = EnemyFactory.LoadSpriteOrPlaceholder(TomatoSpritePath);
+            EnemyFactory.CreateVegetableZombie(
+                "Target_TomatoZombie", new Vector3(0f, 1.6f, 8f), tomatoSprite,
+                juiceColor: new Color(0.9f, 0.15f, 0.1f), scale: 2f, respawns: true);
 
             var rigGo = new GameObject("GyroAimTestRig");
             rigGo.AddComponent<PhoneControllerServer>();
