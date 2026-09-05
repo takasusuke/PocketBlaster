@@ -55,5 +55,21 @@ namespace PocketBlaster.Tests.EditMode
             Assert.AreEqual(TargetHitState.Phase.Down, state.CurrentPhase);
             Assert.AreEqual(1f, state.PhaseProgress01, 0.001f);
         }
+
+        [Test]
+        public void NonRespawningTargetStaysDefeatedAfterDown()
+        {
+            var state = new TargetHitState(0.1f, 0.2f, 0.3f, respawns: false);
+            state.TryHit();
+            state.Tick(0.1f); // -> KnockDown
+            state.Tick(0.2f); // -> Down
+            state.Tick(0.3f); // Down終了 -> respawns:falseなのでDefeated(終端)
+            Assert.AreEqual(TargetHitState.Phase.Defeated, state.CurrentPhase);
+            Assert.IsFalse(state.IsHittable);
+
+            // それ以降Tickしても状態は変わらない(終端)
+            state.Tick(10f);
+            Assert.AreEqual(TargetHitState.Phase.Defeated, state.CurrentPhase);
+        }
     }
 }

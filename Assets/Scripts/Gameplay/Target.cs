@@ -16,24 +16,31 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private float downDurationSeconds = 1.2f;
         [SerializeField] private Color hitFlashColor = Color.white;
         [SerializeField] private float knockbackAngleDegrees = 70f;
+        [SerializeField] private bool respawnsAfterDefeat = true;
 
+        /// <summary>撃たれるたびに呼ばれる(復帰する場合も含む)</summary>
         public event System.Action OnHit;
+        /// <summary>倒された後に復帰しない設定(respawnsAfterDefeat=false)の時、退場が確定した瞬間に1回だけ呼ばれる</summary>
+        public event System.Action OnDefeated;
 
         private Renderer _renderer;
+        private Collider _collider;
         private Color _baseColor;
         private Quaternion _baseRotation;
         private Quaternion _knockedRotation;
         private TargetHitState _state;
+        private bool _hasFiredDefeated;
 
         public bool IsHittable => _state.IsHittable;
 
         private void Awake()
         {
             _renderer = GetComponent<Renderer>();
+            _collider = GetComponent<Collider>();
             _baseColor = _renderer.material.color;
             _baseRotation = transform.localRotation;
             _knockedRotation = _baseRotation * Quaternion.Euler(knockbackAngleDegrees, 0f, 0f);
-            _state = new TargetHitState(flashDurationSeconds, knockDurationSeconds, downDurationSeconds);
+            _state = new TargetHitState(flashDurationSeconds, knockDurationSeconds, downDurationSeconds, respawnsAfterDefeat);
         }
 
         public void TakeHit()
@@ -48,6 +55,14 @@ namespace PocketBlaster.Gameplay
         {
             _state.Tick(Time.deltaTime);
             ApplyVisual();
+
+            if (_state.CurrentPhase == TargetHitState.Phase.Defeated && !_hasFiredDefeated)
+            {
+                _hasFiredDefeated = true;
+                if (_collider != null) _collider.enabled = false;
+                _renderer.enabled = false;
+                OnDefeated?.Invoke();
+            }
         }
 
         private void ApplyVisual()

@@ -5,6 +5,11 @@ namespace PocketBlaster.Gameplay
     /// MonoBehaviour(Target)はTick()で進め、CurrentPhase/PhaseProgress01を見て
     /// 色・回転などの見た目を反映するだけにする。Coroutineに頼らないことで、
     /// EditModeテストからPlay Modeなしで検証できる(AmmoStateと同じ狙い)。
+    ///
+    /// マイルストーン3の単発フィードバック検証では、繰り返し試せるようDown後に
+    /// 自動で起き上がる(RecoverUp→Idle)。マイルストーン4のウェーブ制ステージでは
+    /// 「倒したら退場する」必要があるため、`respawns: false`でDownの後にDefeated
+    /// (終端、二度と復帰しない)へ進むようにできる。
     /// </summary>
     public class TargetHitState
     {
@@ -14,12 +19,14 @@ namespace PocketBlaster.Gameplay
             Flash,
             KnockDown,
             Down,
-            RecoverUp
+            RecoverUp,
+            Defeated
         }
 
         private readonly float _flashDuration;
         private readonly float _knockDuration;
         private readonly float _downDuration;
+        private readonly bool _respawns;
         private float _elapsedInPhase;
 
         public Phase CurrentPhase { get; private set; } = Phase.Idle;
@@ -36,16 +43,18 @@ namespace PocketBlaster.Gameplay
                     case Phase.KnockDown: return Clamp01(_elapsedInPhase / _knockDuration);
                     case Phase.Down: return 1f;
                     case Phase.RecoverUp: return Clamp01(_elapsedInPhase / _knockDuration);
+                    case Phase.Defeated: return 1f;
                     default: return 0f;
                 }
             }
         }
 
-        public TargetHitState(float flashDuration, float knockDuration, float downDuration)
+        public TargetHitState(float flashDuration, float knockDuration, float downDuration, bool respawns = true)
         {
             _flashDuration = flashDuration;
             _knockDuration = knockDuration;
             _downDuration = downDuration;
+            _respawns = respawns;
         }
 
         /// <returns>実際にヒット処理を開始できたか(反応中の二重ヒットは無視してfalse)</returns>
@@ -58,7 +67,7 @@ namespace PocketBlaster.Gameplay
 
         public void Tick(float deltaTime)
         {
-            if (CurrentPhase == Phase.Idle) return;
+            if (CurrentPhase == Phase.Idle || CurrentPhase == Phase.Defeated) return;
 
             _elapsedInPhase += deltaTime;
             switch (CurrentPhase)
@@ -70,7 +79,7 @@ namespace PocketBlaster.Gameplay
                     if (_elapsedInPhase >= _knockDuration) Advance(Phase.Down);
                     break;
                 case Phase.Down:
-                    if (_elapsedInPhase >= _downDuration) Advance(Phase.RecoverUp);
+                    if (_elapsedInPhase >= _downDuration) Advance(_respawns ? Phase.RecoverUp : Phase.Defeated);
                     break;
                 case Phase.RecoverUp:
                     if (_elapsedInPhase >= _knockDuration) Advance(Phase.Idle);

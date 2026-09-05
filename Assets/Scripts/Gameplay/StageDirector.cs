@@ -1,0 +1,145 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.UIElements;
+
+namespace PocketBlaster.Gameplay
+{
+    /// <summary>
+    /// マイルストーン4(docs/requirements.md §4): オンレールの敵配置・複数ウェーブを持つ
+    /// 短い1ステージ。「ゲームとしての手触りを通しで確認する」ことが目的なので、
+    /// カメラの移動は滑らかなレール(スプライン)ではなく、ウェーブごとの固定ポイント間を
+    /// 単純に補間するだけの最小実装にしてある。
+    ///
+    /// 各ウェーブの敵(Target、respawnsAfterDefeat=falseにしておく必要がある)を全滅させると
+    /// 次のウェーブのカメラ位置へ移動する。最後のウェーブをクリアすると「ステージクリア」を表示。
+    /// </summary>
+    public class StageDirector : MonoBehaviour
+    {
+        [System.Serializable]
+        public class Wave
+        {
+            public Transform cameraWaypoint;
+            public Target[] enemies;
+        }
+
+        [SerializeField] private Camera stageCamera;
+        [SerializeField] private Wave[] waves;
+        [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
+
+        private StageProgressState _progress;
+        private UIDocument _uiDocument;
+        private PanelSettings _panelSettings;
+        private Label _waveLabel;
+
+        private void Awake()
+        {
+            if (stageCamera == null) stageCamera = Camera.main;
+
+            var enemyCounts = new int[waves.Length];
+            for (var i = 0; i < waves.Length; i++)
+            {
+                enemyCounts[i] = waves[i].enemies.Length;
+                foreach (var enemy in waves[i].enemies)
+                {
+                    enemy.gameObject.SetActive(false);
+                }
+            }
+            _progress = new StageProgressState(enemyCounts);
+
+            BuildUi();
+            StartNextWave();
+        }
+
+        private void StartNextWave()
+        {
+            if (!_progress.AdvanceToNextWave())
+            {
+                ShowStageClear();
+                return;
+            }
+
+            var wave = waves[_progress.CurrentWaveIndex];
+            foreach (var enemy in wave.enemies)
+            {
+                enemy.gameObject.SetActive(true);
+                enemy.OnDefeated += HandleEnemyDefeated;
+            }
+
+            UpdateWaveLabel();
+
+            if (wave.cameraWaypoint != null)
+            {
+                StopAllCoroutines();
+                StartCoroutine(MoveCameraTo(wave.cameraWaypoint.position, wave.cameraWaypoint.rotation));
+            }
+        }
+
+        private void HandleEnemyDefeated()
+        {
+            var wave = waves[_progress.CurrentWaveIndex];
+            var waveCleared = _progress.NotifyEnemyDefeated();
+            UpdateWaveLabel();
+
+            if (waveCleared)
+            {
+                foreach (var enemy in wave.enemies)
+                {
+                    enemy.OnDefeated -= HandleEnemyDefeated;
+                }
+                StartNextWave();
+            }
+        }
+
+        private IEnumerator MoveCameraTo(Vector3 targetPosition, Quaternion targetRotation)
+        {
+            var startPosition = stageCamera.transform.position;
+            var startRotation = stageCamera.transform.rotation;
+            var t = 0f;
+            while (t < cameraMoveDurationSeconds)
+            {
+                t += Time.deltaTime;
+                var p = Mathf.Clamp01(t / cameraMoveDurationSeconds);
+                stageCamera.transform.position = Vector3.Lerp(startPosition, targetPosition, p);
+                stageCamera.transform.rotation = Quaternion.Slerp(startRotation, targetRotation, p);
+                yield return null;
+            }
+            stageCamera.transform.position = targetPosition;
+            stageCamera.transform.rotation = targetRotation;
+        }
+
+        private void UpdateWaveLabel()
+        {
+            _waveLabel.text = $"ウェーブ {_progress.CurrentWaveIndex + 1}/{_progress.WaveCount}" +
+                               $"  残り敵: {_progress.RemainingInCurrentWave}";
+        }
+
+        private void ShowStageClear()
+        {
+            _waveLabel.text = "ステージクリア！";
+        }
+
+        private void BuildUi()
+        {
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+
+            var uiDocumentGo = new GameObject("StageDirectorUI");
+            uiDocumentGo.transform.SetParent(transform, false);
+            _uiDocument = uiDocumentGo.AddComponent<UIDocument>();
+            _uiDocument.panelSettings = _panelSettings;
+
+            _waveLabel = new Label();
+            _waveLabel.style.position = Position.Absolute;
+            _waveLabel.style.top = 12;
+            _waveLabel.style.right = 12;
+            _waveLabel.style.color = Color.white;
+            _waveLabel.style.fontSize = 20;
+            _waveLabel.style.unityTextAlign = TextAnchor.UpperRight;
+            _uiDocument.rootVisualElement.Add(_waveLabel);
+        }
+
+        private void OnDestroy()
+        {
+            if (_panelSettings != null) Destroy(_panelSettings);
+        }
+    }
+}
