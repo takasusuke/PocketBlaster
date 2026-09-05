@@ -147,20 +147,33 @@ namespace PocketBlaster.Aim
             _lastShotResult = TryHitTargetAtReticle() ? "命中" : "はずれ";
         }
 
+        /// <summary>
+        /// 現在のレティクル位置からカメラの視線を飛ばしたレイ。射撃判定(TryHitTargetAtReticle)
+        /// だけでなく、足踏み移動(PlayerLocomotion)が「狙っている方向」を知るためにも使う。
+        /// nullを返すことがある(カメラが見つからない場合)ので呼び出し側で判定すること。
+        /// </summary>
+        public Ray? GetAimRay()
+        {
+            var cam = aimCamera != null ? aimCamera : Camera.main;
+            if (cam == null) return null;
+
+            // レティクルはUI Toolkit座標(原点が左上・下方向がプラス)なので、
+            // Cameraのスクリーン座標(原点が左下・上方向がプラス)へY軸を反転して合わせる。
+            var screenPoint = new Vector3(_reticleScreenX, Screen.height - _reticleScreenY, 0f);
+            return cam.ScreenPointToRay(screenPoint);
+        }
+
         /// <returns>Targetにヒットしたか</returns>
         private bool TryHitTargetAtReticle()
         {
-            var cam = aimCamera != null ? aimCamera : Camera.main;
-            if (cam == null)
+            var aimRay = GetAimRay();
+            if (aimRay == null)
             {
                 _audioSource.PlayOneShot(_missClip);
                 return false;
             }
 
-            // レティクルはUI Toolkit座標(原点が左上・下方向がプラス)なので、
-            // Cameraのスクリーン座標(原点が左下・上方向がプラス)へY軸を反転して合わせる。
-            var screenPoint = new Vector3(_reticleScreenX, Screen.height - _reticleScreenY, 0f);
-            var ray = cam.ScreenPointToRay(screenPoint);
+            var ray = aimRay.Value;
 
             if (Physics.Raycast(ray, out var hit, maxHitDistance, hitLayerMask))
             {

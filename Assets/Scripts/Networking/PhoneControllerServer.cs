@@ -12,7 +12,8 @@ namespace PocketBlaster.Networking
     /// PhoneOrientationServer(生のTCP/WebSocket実装)をシーンに置くための薄いラッパー。
     /// スマホのブラウザ(webapp/index.html)が同一Wi-Fi内から https://&lt;このPCのIP&gt;:port/
     /// を開くと、このスクリプトがページを配信し、続けて開かれるWebSocket接続から
-    /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")を受け取る。
+    /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")・
+    /// 足踏み検知("step"、PlayerLocomotion参照)を受け取る。
     ///
     /// httpsなのはiOS Safari等がhttpではDeviceOrientationEventを渡さないため
     /// (PhoneOrientationServer参照)。証明書は自己署名で、当初は「警告が出たら
@@ -30,6 +31,7 @@ namespace PocketBlaster.Networking
         public event Action<float, float, float> OnOrientation;
         public event Action OnReload;
         public event Action OnShoot;
+        public event Action OnStep;
 
         public bool IsConnected { get; private set; }
         public float LatestAlpha { get; private set; }
@@ -86,6 +88,9 @@ namespace PocketBlaster.Networking
                         break;
                     case "shoot":
                         OnShoot?.Invoke();
+                        break;
+                    case "step":
+                        OnStep?.Invoke();
                         break;
                 }
             }

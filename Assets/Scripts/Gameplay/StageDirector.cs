@@ -12,6 +12,12 @@ namespace PocketBlaster.Gameplay
     ///
     /// 各ウェーブの敵(Target、respawnsAfterDefeat=falseにしておく必要がある)を全滅させると
     /// 次のウェーブのカメラ位置へ移動する。最後のウェーブをクリアすると「ステージクリア」を表示。
+    ///
+    /// 足踏みでの微移動(PlayerLocomotion)と共存させる場合は、カメラをこのスクリプトが
+    /// 直接動かすのではなく`moveTarget`(通常はカメラの親、Rig)を動かす — カメラ自身は
+    /// PlayerLocomotionがRigからのローカルオフセットとして動かすため、同じTransformの
+    /// 同じプロパティを2つのスクリプトが取り合わないようにする。`moveTarget`未指定時は
+    /// 従来通りカメラ自身を動かす。
     /// </summary>
     public class StageDirector : MonoBehaviour
     {
@@ -23,6 +29,7 @@ namespace PocketBlaster.Gameplay
         }
 
         [SerializeField] private Camera stageCamera;
+        [SerializeField] private Transform moveTarget;
         [SerializeField] private Wave[] waves;
         [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
 
@@ -34,6 +41,7 @@ namespace PocketBlaster.Gameplay
         private void Awake()
         {
             if (stageCamera == null) stageCamera = Camera.main;
+            if (moveTarget == null) moveTarget = stageCamera.transform;
 
             var enemyCounts = new int[waves.Length];
             for (var i = 0; i < waves.Length; i++)
@@ -92,19 +100,19 @@ namespace PocketBlaster.Gameplay
 
         private IEnumerator MoveCameraTo(Vector3 targetPosition, Quaternion targetRotation)
         {
-            var startPosition = stageCamera.transform.position;
-            var startRotation = stageCamera.transform.rotation;
+            var startPosition = moveTarget.position;
+            var startRotation = moveTarget.rotation;
             var t = 0f;
             while (t < cameraMoveDurationSeconds)
             {
                 t += Time.deltaTime;
                 var p = Mathf.Clamp01(t / cameraMoveDurationSeconds);
-                stageCamera.transform.position = Vector3.Lerp(startPosition, targetPosition, p);
-                stageCamera.transform.rotation = Quaternion.Slerp(startRotation, targetRotation, p);
+                moveTarget.position = Vector3.Lerp(startPosition, targetPosition, p);
+                moveTarget.rotation = Quaternion.Slerp(startRotation, targetRotation, p);
                 yield return null;
             }
-            stageCamera.transform.position = targetPosition;
-            stageCamera.transform.rotation = targetRotation;
+            moveTarget.position = targetPosition;
+            moveTarget.rotation = targetRotation;
         }
 
         private void UpdateWaveLabel()

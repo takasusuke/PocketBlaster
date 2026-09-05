@@ -1,5 +1,6 @@
 using System.IO;
 using PocketBlaster.Aim;
+using PocketBlaster.Gameplay;
 using PocketBlaster.Networking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -47,7 +48,12 @@ namespace PocketBlaster.EditorTools
 
             var rigGo = new GameObject("GyroAimTestRig");
             rigGo.AddComponent<PhoneControllerServer>();
-            rigGo.AddComponent<GyroReticleController>();
+            var reticleController = rigGo.AddComponent<GyroReticleController>();
+            var locomotion = rigGo.AddComponent<PlayerLocomotion>();
+            var locomotionSo = new SerializedObject(locomotion);
+            locomotionSo.FindProperty("movableRoot").objectReferenceValue = cameraGo.transform;
+            locomotionSo.FindProperty("aimSource").objectReferenceValue = reticleController;
+            locomotionSo.ApplyModifiedPropertiesWithoutUndo();
 
             var dir = Path.GetDirectoryName(ScenePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))

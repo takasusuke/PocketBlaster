@@ -43,13 +43,20 @@ namespace PocketBlaster.EditorTools
             var wave2Waypoint = CreateWaypoint("Waypoint_Wave2", new Vector3(0f, 1.6f, 1f));
             var wave3Waypoint = CreateWaypoint("Waypoint_Wave3", new Vector3(0f, 1.6f, 2f));
 
+            // PlayerRig(StageDirectorがウェーブ間でLerp移動させる)の子にカメラを置く。
+            // カメラ自身のローカル位置はPlayerLocomotionが足踏みのたびに動かす — 親(Rigの
+            // ウェーブ間移動)と子(その場の微移動)が同じTransformの同じプロパティを
+            // 取り合わないようにするため(StageDirector.cs参照)。
+            var playerRigGo = new GameObject("PlayerRig");
+            playerRigGo.transform.position = wave1Waypoint.position;
+            playerRigGo.transform.rotation = wave1Waypoint.rotation;
+
             var cameraGo = new GameObject("Main Camera");
             cameraGo.tag = "MainCamera";
+            cameraGo.transform.SetParent(playerRigGo.transform, false);
             var camera = cameraGo.AddComponent<Camera>();
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.35f, 0.55f, 0.75f);
-            cameraGo.transform.position = wave1Waypoint.position;
-            cameraGo.transform.rotation = wave1Waypoint.rotation;
             cameraGo.AddComponent<AudioListener>();
 
             var lightGo = new GameObject("Directional Light");
@@ -78,12 +85,18 @@ namespace PocketBlaster.EditorTools
 
             var rigGo = new GameObject("GyroAimTestRig");
             rigGo.AddComponent<PhoneControllerServer>();
-            rigGo.AddComponent<GyroReticleController>();
+            var reticleController = rigGo.AddComponent<GyroReticleController>();
+            var locomotion = rigGo.AddComponent<PlayerLocomotion>();
+            var locomotionSo = new SerializedObject(locomotion);
+            locomotionSo.FindProperty("movableRoot").objectReferenceValue = cameraGo.transform;
+            locomotionSo.FindProperty("aimSource").objectReferenceValue = reticleController;
+            locomotionSo.ApplyModifiedPropertiesWithoutUndo();
 
             var directorGo = new GameObject("StageDirector");
             var director = directorGo.AddComponent<StageDirector>();
             var directorSo = new SerializedObject(director);
             directorSo.FindProperty("stageCamera").objectReferenceValue = camera;
+            directorSo.FindProperty("moveTarget").objectReferenceValue = playerRigGo.transform;
 
             var wavesProp = directorSo.FindProperty("waves");
             wavesProp.arraySize = 3;

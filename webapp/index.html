@@ -35,6 +35,7 @@
   #reloadBtn { background: #FF7A45; color: white; }
   #reloadBtn:disabled { background: #333; color: #888; }
   #raw { font-size: 12px; color: #888; }
+  #stepStatus { font-size: 13px; color: #aaa; }
   #axisSettings {
     width: 100%; max-width: 360px; box-sizing: border-box;
     background: #16161f; border-radius: 12px; padding: 12px 16px;
@@ -78,6 +79,7 @@
   <button id="shootBtn" disabled>撃つ</button>
   <button id="reloadBtn" disabled>リロード（弾を補充し、狙いを基準位置にリセット）</button>
   <div id="raw"></div>
+  <div id="stepStatus">歩数: <span id="stepCount">0</span>（狙っている方向へ移動）</div>
 </div>
 <script>
 (function () {
@@ -86,6 +88,7 @@
   var shootBtn = document.getElementById('shootBtn');
   var reloadBtn = document.getElementById('reloadBtn');
   var rawEl = document.getElementById('raw');
+  var stepCountEl = document.getElementById('stepCount');
   var verticalAxisSelect = document.getElementById('verticalAxisSelect');
   var horizontalAxisSelect = document.getElementById('horizontalAxisSelect');
   var invertVerticalCheckbox = document.getElementById('invertVertical');
@@ -172,6 +175,55 @@
     ws.send(JSON.stringify({ type: 'orientation', alpha: alpha || 0, beta: beta || 0, gamma: gamma || 0 }));
   }
 
+  function sendMessage(type) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: type }));
+  }
+
+  // --- リロードのジェスチャー検知(オーナー要望、2026-09-06) ---
+  // 「スマホを上方向に素早く向けて戻す」動作でリロードする。上下どちら向きが
+  // 物理的な「上」に当たるかは持ち方設定(invertVertical)で変わるため符号を仮定せず、
+  // remapOrientationで既に補正済みの「上下方向」の値が短時間で大きく振れて
+  // 元へ戻る(≒スパイク)パターンだけを見る。ボタンでのリロードは引き続き併用できる。
+  var verticalHistory = []; // {t, v}
+  var FLICK_WINDOW_MS = 400;
+  var FLICK_MIN_SWING_DEG = 25;
+  var FLICK_RETURN_TOLERANCE_DEG = 12;
+  var FLICK_COOLDOWN_MS = 1000;
+  var lastFlickReloadAt = 0;
+
+  function checkReloadFlickGesture(now, verticalValue) {
+    verticalHistory.push({ t: now, v: verticalValue });
+    while (verticalHistory.length > 0 && now - verticalHistory[0].t > FLICK_WINDOW_MS) {
+      verticalHistory.shift();
+    }
+    if (verticalHistory.length < 3) return false;
+    if (now - lastFlickReloadAt < FLICK_COOLDOWN_MS) return false;
+
+    var baseline = verticalHistory[0].v;
+    var maxDeviation = 0;
+    var peakIndex = 0;
+    for (var i = 1; i < verticalHistory.length; i++) {
+      var deviation = Math.abs(verticalHistory[i].v - baseline);
+      if (deviation > maxDeviation) {
+        maxDeviation = deviation;
+        peakIndex = i;
+      }
+    }
+    if (maxDeviation < FLICK_MIN_SWING_DEG) return false;
+
+    var latest = verticalHistory[verticalHistory.length - 1].v;
+    var returnedToBaseline = Math.abs(latest - baseline) < FLICK_RETURN_TOLERANCE_DEG;
+    var peakWasInMiddle = peakIndex > 0 && peakIndex < verticalHistory.length - 1;
+
+    if (returnedToBaseline && peakWasInMiddle) {
+      lastFlickReloadAt = now;
+      verticalHistory = [];
+      return true;
+    }
+    return false;
+  }
+
   function onDeviceOrientation(e) {
     var rawAlpha = e.alpha || 0;
     var rawBeta = e.beta || 0;
@@ -181,10 +233,46 @@
       ' gamma=' + rawGamma.toFixed(1);
     var remapped = remapOrientation(rawAlpha, rawBeta, rawGamma);
     sendOrientation(rawAlpha, remapped.beta, remapped.gamma);
+
+    if (checkReloadFlickGesture(Date.now(), remapped.beta)) {
+      sendMessage('reload');
+    }
   }
 
   function startOrientationStream() {
     window.addEventListener('deviceorientation', onDeviceOrientation);
+  }
+
+  // --- 足踏み検知でのプレイヤー移動(オーナー要望、2026-09-06) ---
+  // 加速度センサーの合成値(重力込み)は、静止時は重力加速度(~9.8)近辺で安定するが、
+  // その場で足踏みすると着地の瞬間に大きく跳ね上がる。この跳ね上がりを単純な
+  // ローパスフィルタ(移動平均に近い指数平滑化)からの乖離として検出する、
+  // 簡易的な歩数計と同じ考え方。
+  var smoothedMagnitude = 9.8;
+  var SMOOTHING_FACTOR = 0.15;
+  var STEP_THRESHOLD = 1.8; // 平滑値からの乖離がこれを超えたら1歩とみなす(要実機調整)
+  var STEP_MIN_INTERVAL_MS = 250; // 1歩と数える最短間隔(連続カウント防止)
+  var lastStepAt = 0;
+  var stepCount = 0;
+
+  function onDeviceMotion(e) {
+    var acc = e.accelerationIncludingGravity;
+    if (!acc || acc.x === null || acc.x === undefined) return;
+
+    var magnitude = Math.sqrt(acc.x * acc.x + acc.y * acc.y + acc.z * acc.z);
+    smoothedMagnitude += (magnitude - smoothedMagnitude) * SMOOTHING_FACTOR;
+
+    var now = Date.now();
+    if (magnitude - smoothedMagnitude > STEP_THRESHOLD && now - lastStepAt > STEP_MIN_INTERVAL_MS) {
+      lastStepAt = now;
+      stepCount++;
+      stepCountEl.textContent = String(stepCount);
+      sendMessage('step');
+    }
+  }
+
+  function startMotionStream() {
+    window.addEventListener('devicemotion', onDeviceMotion);
   }
 
   function requestOrientationPermissionIfNeeded() {
@@ -194,6 +282,19 @@
       return DeviceOrientationEvent.requestPermission().then(function (result) {
         if (result !== 'granted') {
           throw new Error('センサーの利用が許可されませんでした');
+        }
+      });
+    }
+    return Promise.resolve();
+  }
+
+  function requestMotionPermissionIfNeeded() {
+    // DeviceOrientationEventとは別の許可が必要(iOS Safari)。歩数検知に使う。
+    if (typeof DeviceMotionEvent !== 'undefined' &&
+        typeof DeviceMotionEvent.requestPermission === 'function') {
+      return DeviceMotionEvent.requestPermission().then(function (result) {
+        if (result !== 'granted') {
+          throw new Error('モーションセンサーの利用が許可されませんでした(歩数検知に必要)');
         }
       });
     }
@@ -210,9 +311,11 @@
     connectBtn.disabled = true;
     setStatus('接続中...');
     requestOrientationPermissionIfNeeded()
+      .then(requestMotionPermissionIfNeeded)
       .then(function () {
         requestWakeLockBestEffort();
         startOrientationStream();
+        startMotionStream();
         connectWebSocket();
       })
       .catch(function (err) {
@@ -222,13 +325,11 @@
   });
 
   shootBtn.addEventListener('click', function () {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'shoot' }));
+    sendMessage('shoot');
   });
 
   reloadBtn.addEventListener('click', function () {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ type: 'reload' }));
+    sendMessage('reload');
   });
 })();
 </script>
