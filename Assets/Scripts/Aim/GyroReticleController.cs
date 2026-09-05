@@ -1,3 +1,5 @@
+using PocketBlaster.Audio;
+using PocketBlaster.Gameplay;
 using PocketBlaster.Networking;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -16,17 +18,32 @@ namespace PocketBlaster.Aim
     /// 「直近のリロードからの経過時間」を画面に出し、静止したまま経過時間を伸ばして
     /// レティクルが動くかどうかを目視できるようにしてある(docs/HANDOFF.md 検証手順)。
     ///
+    /// マイルストーン3: 弾が当たったら、レティクルのスクリーン座標からカメラの視線を
+    /// 飛ばして`Target`(固定の仮の敵)にヒット判定する。着弾フィードバックは仮の
+    /// 効果音(ProceduralSfx)のみ — 「撃つ感触」そのものを詰める段階なので、
+    /// アート・SEアセットより先にゲームプレイの手触りを検証する
+    /// (../CLAUDE.md 11「初期実装では画像を作らない」と同じ考え方)。
+    ///
     /// UI ToolkitはPackages/manifest.jsonの追加なしで使えるため、PanelSettingsも
     /// 実行時に生成しシーンにアセットを持たせない。
     /// </summary>
     [RequireComponent(typeof(PhoneControllerServer))]
+    [RequireComponent(typeof(AudioSource))]
     public class GyroReticleController : MonoBehaviour
     {
         [SerializeField] private float degreesToScreenPixels = 12f;
         [SerializeField] private int magazineSize = 6;
+        [SerializeField] private Camera aimCamera;
+        [SerializeField] private LayerMask hitLayerMask = ~0;
+        [SerializeField] private float maxHitDistance = 1000f;
 
         private PhoneControllerServer _server;
         private AmmoState _ammo;
+        private AudioSource _audioSource;
+        private AudioClip _shotClip;
+        private AudioClip _hitClip;
+        private AudioClip _missClip;
+        private AudioClip _emptyClickClip;
         private UIDocument _uiDocument;
         private PanelSettings _panelSettings;
         private VisualElement _reticle;
@@ -37,8 +54,11 @@ namespace PocketBlaster.Aim
         private float _refGamma;
         private float _offsetX;
         private float _offsetY;
+        private float _reticleScreenX;
+        private float _reticleScreenY;
         private float _timeSinceReload;
         private float _emptyClickFlashTimer;
+        private string _lastShotResult = "-";
 
         private void Awake()
         {
@@ -46,6 +66,12 @@ namespace PocketBlaster.Aim
             _ammo = new AmmoState(magazineSize);
             _server.OnReload += HandleReload;
             _server.OnShoot += HandleShoot;
+
+            _audioSource = GetComponent<AudioSource>();
+            _shotClip = ProceduralSfx.CreateTone("sfx_shot", 880f, 0.05f, 0.03f);
+            _hitClip = ProceduralSfx.CreateTone("sfx_hit", 440f, 0.15f, 0.1f);
+            _missClip = ProceduralSfx.CreateTone("sfx_miss", 220f, 0.08f, 0.06f);
+            _emptyClickClip = ProceduralSfx.CreateTone("sfx_empty", 120f, 0.05f, 0.02f);
 
             BuildUi();
         }
@@ -81,6 +107,8 @@ namespace PocketBlaster.Aim
             var x = Mathf.Clamp(halfW + _offsetX, 0, Screen.width);
             var y = Mathf.Clamp(halfH + _offsetY, 0, Screen.height);
 
+            _reticleScreenX = x;
+            _reticleScreenY = y;
             _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
             _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
 
@@ -98,7 +126,8 @@ namespace PocketBlaster.Aim
                 $"基準からの差分  β:{betaDelta:F1} γ:{gammaDelta:F1}\n" +
                 $"{ammoLine}\n" +
                 $"前回リロードからの経過時間: {_timeSinceReload:F1}秒" +
-                "（静止したままこの値が伸びてもレティクルが動かなければドリフトは無視できる）";
+                "（静止したままこの値が伸びてもレティクルが動かなければドリフトは無視できる）\n" +
+                $"直近の射撃結果: {_lastShotResult}";
         }
 
         private void HandleShoot()
@@ -106,7 +135,43 @@ namespace PocketBlaster.Aim
             if (!_ammo.Shoot())
             {
                 _emptyClickFlashTimer = 1f;
+                _audioSource.PlayOneShot(_emptyClickClip);
+                _lastShotResult = "弾切れ";
+                return;
             }
+
+            _audioSource.PlayOneShot(_shotClip);
+            _lastShotResult = TryHitTargetAtReticle() ? "命中" : "はずれ";
+        }
+
+        /// <returns>Targetにヒットしたか</returns>
+        private bool TryHitTargetAtReticle()
+        {
+            var cam = aimCamera != null ? aimCamera : Camera.main;
+            if (cam == null)
+            {
+                _audioSource.PlayOneShot(_missClip);
+                return false;
+            }
+
+            // レティクルはUI Toolkit座標(原点が左上・下方向がプラス)なので、
+            // Cameraのスクリーン座標(原点が左下・上方向がプラス)へY軸を反転して合わせる。
+            var screenPoint = new Vector3(_reticleScreenX, Screen.height - _reticleScreenY, 0f);
+            var ray = cam.ScreenPointToRay(screenPoint);
+
+            if (Physics.Raycast(ray, out var hit, maxHitDistance, hitLayerMask))
+            {
+                var target = hit.collider.GetComponentInParent<Target>();
+                if (target != null && target.IsHittable)
+                {
+                    target.TakeHit();
+                    _audioSource.PlayOneShot(_hitClip);
+                    return true;
+                }
+            }
+
+            _audioSource.PlayOneShot(_missClip);
+            return false;
         }
 
         private void HandleReload()
