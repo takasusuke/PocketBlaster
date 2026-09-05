@@ -15,12 +15,17 @@ namespace PocketBlaster.Networking
     /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")を受け取る。
     ///
     /// httpsなのはiOS Safari等がhttpではDeviceOrientationEventを渡さないため
-    /// (PhoneOrientationServer参照)。証明書は自己署名なので、スマホ側で初回に
-    /// 「信頼して進む」操作が必要になる — LogConnectionInfoでその旨も案内する。
+    /// (PhoneOrientationServer参照)。証明書は自己署名で、当初は「警告が出たら
+    /// このまま進む」方式にしていたが、iOS Safariでは警告ページから進めず、
+    /// Chrome/Braveではabout:blankに落ちるだけの挙動を実機で確認した(2026-09-05)。
+    /// そのため証明書を構成プロファイルとしてインストールし「常に信頼する」設定に
+    /// する方式に変更 — 別ポート(certificatePort)で証明書の公開部分だけを平文HTTPで
+    /// 配布するCertificateDownloadServerを併走させる。
     /// </summary>
     public class PhoneControllerServer : MonoBehaviour
     {
         [SerializeField] private int port = 7777;
+        [SerializeField] private int certificatePort = 7778;
 
         public event Action<float, float, float> OnOrientation;
         public event Action OnReload;
@@ -33,6 +38,7 @@ namespace PocketBlaster.Networking
         public int Port => port;
 
         private PhoneOrientationServer _server;
+        private CertificateDownloadServer _certificateDownloadServer;
 
         private void Awake()
         {
@@ -52,6 +58,10 @@ namespace PocketBlaster.Networking
             var indexHtmlPath = Path.Combine(Application.dataPath, "..", "webapp", "index.html");
             _server = new PhoneOrientationServer(port, indexHtmlPath, certificate);
             _server.Start();
+
+            _certificateDownloadServer = new CertificateDownloadServer(certificatePort, certificate);
+            _certificateDownloadServer.Start();
+
             LogConnectionInfo(GetLocalIPv4Addresses());
         }
 
@@ -84,6 +94,7 @@ namespace PocketBlaster.Networking
         private void OnDestroy()
         {
             _server?.Stop();
+            _certificateDownloadServer?.Stop();
         }
 
         private static List<IPAddress> GetLocalIPv4Addresses()
@@ -109,10 +120,17 @@ namespace PocketBlaster.Networking
 
         private void LogConnectionInfo(List<IPAddress> localIps)
         {
-            Debug.Log($"[PhoneControllerServer] port {port} で待ち受け中。" +
-                      "スマホのブラウザで以下のいずれかを開いてください " +
-                      "(自己署名証明書のため、初回は「安全でない接続」の警告を" +
-                      "手動で許可して進む必要があります):");
+            Debug.Log("[PhoneControllerServer] 初回のみ、証明書のインストールが必要です。" +
+                      $"まずスマホのブラウザで以下を開いて証明書ファイルをダウンロードし、" +
+                      "「設定」→「一般」→「VPNとデバイス管理」からプロファイルをインストール、" +
+                      "続けて「設定」→「一般」→「情報」→「証明書信頼設定」で" +
+                      "「PocketBlaster Dev Server」を完全に信頼する設定にしてください:");
+            foreach (var addr in localIps)
+            {
+                Debug.Log($"  http://{addr}:{certificatePort}/  (証明書のダウンロード)");
+            }
+
+            Debug.Log($"[PhoneControllerServer] 証明書の信頼設定が済んだら、port {port} のコントローラー画面を開いてください:");
             foreach (var addr in localIps)
             {
                 Debug.Log($"  https://{addr}:{port}/");
