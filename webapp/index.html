@@ -30,6 +30,8 @@
   }
   #connectBtn { background: #4C6FFF; color: white; }
   #connectBtn:disabled { background: #333; color: #888; }
+  #shootBtn { background: #E23B3B; color: white; font-size: 22px; padding: 28px; }
+  #shootBtn:disabled { background: #333; color: #888; }
   #reloadBtn { background: #FF7A45; color: white; }
   #reloadBtn:disabled { background: #333; color: #888; }
   #raw { font-size: 12px; color: #888; }
@@ -40,13 +42,15 @@
   <h1>PocketBlaster コントローラー</h1>
   <div id="status">未接続</div>
   <button id="connectBtn">接続する</button>
-  <button id="reloadBtn" disabled>リロード（狙いを基準位置にリセット）</button>
+  <button id="shootBtn" disabled>撃つ</button>
+  <button id="reloadBtn" disabled>リロード（弾を補充し、狙いを基準位置にリセット）</button>
   <div id="raw"></div>
 </div>
 <script>
 (function () {
   var statusEl = document.getElementById('status');
   var connectBtn = document.getElementById('connectBtn');
+  var shootBtn = document.getElementById('shootBtn');
   var reloadBtn = document.getElementById('reloadBtn');
   var rawEl = document.getElementById('raw');
 
@@ -65,10 +69,12 @@
 
     ws.onopen = function () {
       setStatus('接続済み\n' + url, 'connected');
+      shootBtn.disabled = false;
       reloadBtn.disabled = false;
     };
     ws.onclose = function () {
       setStatus('切断されました。もう一度「接続する」を押してください', 'error');
+      shootBtn.disabled = true;
       reloadBtn.disabled = true;
     };
     ws.onerror = function () {
@@ -127,6 +133,11 @@
         setStatus(String(err.message || err), 'error');
         connectBtn.disabled = false;
       });
+  });
+
+  shootBtn.addEventListener('click', function () {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: 'shoot' }));
   });
 
   reloadBtn.addEventListener('click', function () {

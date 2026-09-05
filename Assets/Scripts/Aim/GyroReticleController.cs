@@ -5,11 +5,17 @@ using UnityEngine.UIElements;
 namespace PocketBlaster.Aim
 {
     /// <summary>
-    /// マイルストーン1用: スマホのジャイロ値(alpha/beta/gamma)を画面座標のレティクル位置へ
-    /// マッピングする。狙点はスティック選択ではなく「基準からの回転差分」で動かす
-    /// (../CLAUDE.md 設計上の不変条件1)。基準は初回受信時、または"reload"メッセージ受信時
-    /// (Recenter)に取り直す — マイルストーン2で本実装するリロード連動キャリブレーションの
-    /// 配線だけ先に用意している。
+    /// スマホのジャイロ値(alpha/beta/gamma)を画面座標のレティクル位置へマッピングする。
+    /// 狙点はスティック選択ではなく「基準からの回転差分」で動かす(../CLAUDE.md 設計上の
+    /// 不変条件1)。基準は初回受信時、または"reload"メッセージ受信時(Recenter)に取り直す。
+    ///
+    /// マイルストーン2: リロードを「弾切れ時に必ず行う」実際のゲームプレイに結び付けた
+    /// (AmmoState)。弾切れ→リロード→再キャリブレーションという一連の流れが自然に起きる
+    /// ことで、ドリフトが実用上気になるかを実機でのプレイを通して検証できるようにする
+    /// (docs/requirements.md §4 マイルストーン2)。ドリフト自体の量は実機でしか測れないため、
+    /// 「直近のリロードからの経過時間」を画面に出し、静止したまま経過時間を伸ばして
+    /// レティクルが動くかどうかを目視できるようにしてある(docs/HANDOFF.md 検証手順)。
+    ///
     /// UI ToolkitはPackages/manifest.jsonの追加なしで使えるため、PanelSettingsも
     /// 実行時に生成しシーンにアセットを持たせない。
     /// </summary>
@@ -17,8 +23,10 @@ namespace PocketBlaster.Aim
     public class GyroReticleController : MonoBehaviour
     {
         [SerializeField] private float degreesToScreenPixels = 12f;
+        [SerializeField] private int magazineSize = 6;
 
         private PhoneControllerServer _server;
+        private AmmoState _ammo;
         private UIDocument _uiDocument;
         private PanelSettings _panelSettings;
         private VisualElement _reticle;
@@ -29,18 +37,26 @@ namespace PocketBlaster.Aim
         private float _refGamma;
         private float _offsetX;
         private float _offsetY;
+        private float _timeSinceReload;
+        private float _emptyClickFlashTimer;
 
         private void Awake()
         {
             _server = GetComponent<PhoneControllerServer>();
-            _server.OnReload += Recenter;
+            _ammo = new AmmoState(magazineSize);
+            _server.OnReload += HandleReload;
+            _server.OnShoot += HandleShoot;
 
             BuildUi();
         }
 
         private void OnDestroy()
         {
-            if (_server != null) _server.OnReload -= Recenter;
+            if (_server != null)
+            {
+                _server.OnReload -= HandleReload;
+                _server.OnShoot -= HandleShoot;
+            }
             if (_panelSettings != null) Destroy(_panelSettings);
         }
 
@@ -50,6 +66,9 @@ namespace PocketBlaster.Aim
             {
                 Recenter();
             }
+
+            _timeSinceReload += Time.deltaTime;
+            if (_emptyClickFlashTimer > 0f) _emptyClickFlashTimer -= Time.deltaTime;
 
             var betaDelta = _server.LatestBeta - _refBeta;
             var gammaDelta = _server.LatestGamma - _refGamma;
@@ -65,10 +84,35 @@ namespace PocketBlaster.Aim
             _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
             _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
 
+            var ammoLine = _ammo.CurrentAmmo > 0
+                ? $"弾: {_ammo.CurrentAmmo}/{_ammo.MagazineSize}"
+                : "弾切れ！リロードしてください";
+            if (_emptyClickFlashTimer > 0f)
+            {
+                ammoLine += "  (弾切れでの発射操作を無視しました)";
+            }
+
             _statusLabel.text =
                 $"接続: {(_server.IsConnected ? "済" : "未接続")}  port {_server.Port}\n" +
                 $"alpha={_server.LatestAlpha:F1} beta={_server.LatestBeta:F1} gamma={_server.LatestGamma:F1}\n" +
-                $"基準からの差分  β:{betaDelta:F1} γ:{gammaDelta:F1}";
+                $"基準からの差分  β:{betaDelta:F1} γ:{gammaDelta:F1}\n" +
+                $"{ammoLine}\n" +
+                $"前回リロードからの経過時間: {_timeSinceReload:F1}秒" +
+                "（静止したままこの値が伸びてもレティクルが動かなければドリフトは無視できる）";
+        }
+
+        private void HandleShoot()
+        {
+            if (!_ammo.Shoot())
+            {
+                _emptyClickFlashTimer = 1f;
+            }
+        }
+
+        private void HandleReload()
+        {
+            _ammo.Reload();
+            Recenter();
         }
 
         public void Recenter()
@@ -76,6 +120,7 @@ namespace PocketBlaster.Aim
             _refBeta = _server.LatestBeta;
             _refGamma = _server.LatestGamma;
             _hasReference = true;
+            _timeSinceReload = 0f;
         }
 
         private void BuildUi()

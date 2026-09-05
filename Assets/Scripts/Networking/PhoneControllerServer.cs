@@ -10,7 +10,7 @@ namespace PocketBlaster.Networking
     /// PhoneOrientationServer(生のTCP/WebSocket実装)をシーンに置くための薄いラッパー。
     /// スマホのブラウザ(webapp/index.html)が同一Wi-Fi内から http://&lt;このPCのIP&gt;:port/
     /// を開くと、このスクリプトがページを配信し、続けて開かれるWebSocket接続から
-    /// ジャイロ値("orientation")とリロード操作("reload")を受け取る。
+    /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")を受け取る。
     /// </summary>
     public class PhoneControllerServer : MonoBehaviour
     {
@@ -18,6 +18,7 @@ namespace PocketBlaster.Networking
 
         public event Action<float, float, float> OnOrientation;
         public event Action OnReload;
+        public event Action OnShoot;
 
         public bool IsConnected { get; private set; }
         public float LatestAlpha { get; private set; }
@@ -53,6 +54,9 @@ namespace PocketBlaster.Networking
                         break;
                     case "reload":
                         OnReload?.Invoke();
+                        break;
+                    case "shoot":
+                        OnShoot?.Invoke();
                         break;
                 }
             }

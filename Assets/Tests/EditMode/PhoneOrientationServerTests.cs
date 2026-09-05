@@ -44,6 +44,10 @@ namespace PocketBlaster.Tests.EditMode
                         var reload = WaitForMessage(server, "reload", TimeSpan.FromSeconds(3));
                         Assert.AreEqual("reload", reload.type);
 
+                        SendTextFrame(stream, "{\"type\":\"shoot\"}");
+                        var shoot = WaitForMessage(server, "shoot", TimeSpan.FromSeconds(3));
+                        Assert.AreEqual("shoot", shoot.type);
+
                         Assert.IsTrue(server.IsClientConnected, "ハンドシェイク後は接続中と判定されるべき");
                     }
                 }
