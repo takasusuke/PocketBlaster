@@ -2,11 +2,20 @@
 
 セッションを立て直したら、まずここを読む。詳細は[`requirements.md`](requirements.md)。
 
-## 現状（2026-09-05）
+## 現状（2026-09-06）
 
-マイルストーン1〜3（`docs/requirements.md`§4）を実装済み・自動テスト通過。**実機（iPhone
-Safari）からスマホ→PC間の接続自体は動作確認済み。** ドリフトの実測・「撃つ感触」の判断は
-実機で試した内容を次回セッションで`docs/requirements.md`未決事項へ反映する。
+マイルストーン1〜4（`docs/requirements.md`§4）を実装済み・自動テスト通過。**実機（iPhone
+Safari）からスマホ→PC間の接続・ジャイロでのレティクル操作は動作確認済み。** ドリフトの実測・
+「撃つ感触」の判断、マイルストーン4（複数ウェーブのステージ）の実機確認はまだ行っていない。
+
+実機テストで判明し対応済みの操作性の課題（2026-09-05）:
+- スマホの持ち方（銃のように構える角度）によって、上下左右の動きがbeta/gammaのどちらに
+  どの符号で出るかが変わる問題 → `webapp/index.html`に軸設定（上下:beta/gamma、
+  左右:gamma(傾き)/alpha(回転)、それぞれ反転可）を追加。接続中でも変更可能
+- 「スマホを傾ける」のではなく「スマホ自体を水平に回転させる（銃口を振るイメージ）」で
+  左右を操作したい、という要望 → 左右方向にalpha(水平方向の回転)を選べるようにした。
+  alphaは0/360の境界をまたぐため、Unity側の差分計算を`Mathf.DeltaAngle`に変更して
+  ラップアラウンドを正しく処理するようにした
 
 実機接続までに実際に踏んだ問題と対処（同様の構成を他プロジェクトで作る時の参考）:
 1. Windowsファイアウォール（Publicプロファイル）がポート7777への受信を拒否していた
@@ -53,14 +62,25 @@ Safari）からスマホ→PC間の接続自体は動作確認済み。** ドリ
 - `Assets/Scenes/Milestone3_ShootTarget.unity`: 上記一式（`GyroAimTestRig`+固定の
   `Target_Placeholder`）を配置した検証用シーン（`Milestone3SceneBuilder`の`-executeMethod`
   または「PocketBlaster > Build Milestone3 Scene」で生成）。
+- `Assets/Scripts/Gameplay/StageProgressState.cs`: 現在のウェーブ番号・残り敵数・クリア判定を
+  UnityEngine非依存で表現。`TargetHitState`に`respawns:false`で「倒したら退場する」
+  終端フェーズ(Defeated)を追加し、マイルストーン3の「繰り返し試せる」仮の敵とは別の
+  使い方をできるようにした。
+- `Assets/Scripts/Gameplay/StageDirector.cs`: 上記を使い、ウェーブの敵を全滅させたら
+  次のウェーブのカメラ位置へLerpで移動する進行管理。最後のウェーブクリアで
+  「ステージクリア」表示。
+- `Assets/Scenes/Milestone4_Stage.unity`: 3ウェーブ(2体→3体→仮の「ボス」1体、奥行きが
+  手前に迫る配置)の短いステージ（`Milestone4SceneBuilder`の`-executeMethod`または
+  「PocketBlaster > Build Milestone4 Scene」で生成）。
 - `Assets/Tests/EditMode/`: `PhoneOrientationServerTests`・`AmmoStateTests`・
-  `TargetHitStateTests`・`ProceduralSfxTests`で計12件、すべてpass。
+  `TargetHitStateTests`・`ProceduralSfxTests`・`CertificateDownloadServerTests`・
+  `StageProgressStateTests`で計19件、すべてpass。
   `run-unity.ps1 -ProjectPath . -ExpectOutput TestResults.xml -UnityArgs
   @('-batchmode','-nographics','-runTests','-testPlatform','EditMode','-testResults',
   'TestResults.xml','-logFile','test_run.log')`で再実行できる。
-  **レイキャストでのヒット判定自体（UI Toolkit座標→Cameraスクリーン座標のY反転を含む）は
-  EditModeテストの対象外** — Physicsが動くにはPlay Modeが要るため、下記の実機検証で
-  一緒に確認する。
+  **レイキャストでのヒット判定・カメラのウェーブ間移動・ウェーブ進行の見た目は
+  EditModeテストの対象外** — Physicsやコルーチンが動くにはPlay Modeが要るため、
+  下記の実機検証で一緒に確認する。
 
 ## 実機での接続手順（確認済み、2026-09-05）
 
@@ -94,8 +114,21 @@ Safari）からスマホ→PC間の接続自体は動作確認済み。** ドリ
      見た目のクオリティ（本物のアート・SE）ではなく、フィードバックの種類そのもの
      （画面の揺れ、命中時のポーズ、弾痕など）である可能性が高い — 判断してから次に進む。
 
-**手順5〜7の実際の判断（ジャイロ操作感・ドリフト・撃つ感触）はまだ言語化して記録していない。**
+**手順5〜7の実際の判断（ドリフト・撃つ感触）はまだ言語化して記録していない。**
 次回のセッションで、実機テストで確認した内容を`docs/requirements.md`未決事項へ反映すること。
+
+## `Milestone4_Stage`での確認（まだ誰もやっていない）
+
+`Milestone3_ShootTarget`と同じ接続手順（上記1〜4）の後、`Milestone4_Stage`シーンで
+Play Modeに入って試す。
+
+1. 1ウェーブ目（左右2体）を両方倒すと、カメラが自動的に2ウェーブ目の位置へ動くか確認する。
+2. 2ウェーブ目（3体）→3ウェーブ目（仮のボス、紫の大きいカプセル1体）と順に進み、
+   最後を倒すと画面右上に「ステージクリア！」と出るか確認する。
+3. **判断したいこと**: カメラが切り替わる時の見た目（Lerpでの単純な移動）が唐突に感じるか、
+   ウェーブごとの敵の増減・距離の変化に「進んでいる感じ」があるか。物足りなければ、
+   カメラの移動を滑らかなレール（スプライン）にする、ウェーブ間に演出（フェード等）を
+   挟む、といった改善が次の候補になる。
 
 うまくいかない場合にまず疑うところ:
 - 新しいポートを足した場合、`scripts/check-port-firewall.ps1 -Port <port>`（`~/AIFiles/`）で
