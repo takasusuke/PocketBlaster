@@ -71,5 +71,37 @@ namespace PocketBlaster.Tests.EditMode
             state.Tick(10f);
             Assert.AreEqual(TargetHitState.Phase.Defeated, state.CurrentPhase);
         }
+
+        [Test]
+        public void MultiHitTargetFlashesAndReturnsToIdleOnNonFatalHits()
+        {
+            var state = new TargetHitState(0.1f, 0.2f, 0.3f, respawns: false, hitPoints: 3);
+
+            Assert.IsTrue(state.TryHit());
+            Assert.AreEqual(2, state.RemainingHitPoints);
+            Assert.AreEqual(TargetHitState.Phase.Flash, state.CurrentPhase);
+
+            state.Tick(0.1f); // Flash終了 -> 致命傷ではないのでIdleへ戻る(KnockDownへ進まない)
+            Assert.AreEqual(TargetHitState.Phase.Idle, state.CurrentPhase);
+            Assert.IsTrue(state.IsHittable, "まだ体力が残っているので再度狙えるべき");
+
+            Assert.IsTrue(state.TryHit());
+            Assert.AreEqual(1, state.RemainingHitPoints);
+            state.Tick(0.1f);
+            Assert.AreEqual(TargetHitState.Phase.Idle, state.CurrentPhase);
+        }
+
+        [Test]
+        public void MultiHitTargetKnocksDownOnFinalHit()
+        {
+            var state = new TargetHitState(0.1f, 0.2f, 0.3f, respawns: false, hitPoints: 2);
+            state.TryHit();
+            state.Tick(0.1f); // 1発目: まだ倒れない
+
+            state.TryHit();
+            Assert.AreEqual(0, state.RemainingHitPoints);
+            state.Tick(0.1f); // 2発目(最後): Flash終了でKnockDownへ進むべき
+            Assert.AreEqual(TargetHitState.Phase.KnockDown, state.CurrentPhase);
+        }
     }
 }

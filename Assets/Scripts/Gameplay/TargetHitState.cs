@@ -10,6 +10,10 @@ namespace PocketBlaster.Gameplay
     /// 自動で起き上がる(RecoverUp→Idle)。マイルストーン4のウェーブ制ステージでは
     /// 「倒したら退場する」必要があるため、`respawns: false`でDownの後にDefeated
     /// (終端、二度と復帰しない)へ進むようにできる。
+    ///
+    /// `hitPoints`(既定1)を1より大きくすると、その回数分ヒットするまで倒れない
+    /// 「ボス戦」用の多段ヒットになる(docs/requirements.md §8 将来の拡張)。
+    /// 倒れるまでの各ヒットは短いFlashだけ行いIdleへ戻る(まだ狙える)。
     /// </summary>
     public class TargetHitState
     {
@@ -27,10 +31,13 @@ namespace PocketBlaster.Gameplay
         private readonly float _knockDuration;
         private readonly float _downDuration;
         private readonly bool _respawns;
+        private int _remainingHitPoints;
+        private bool _pendingFatalHit;
         private float _elapsedInPhase;
 
         public Phase CurrentPhase { get; private set; } = Phase.Idle;
         public bool IsHittable => CurrentPhase == Phase.Idle;
+        public int RemainingHitPoints => _remainingHitPoints;
 
         /// <summary>現在のフェーズ内での進捗(0〜1)。KnockDown/RecoverUpの角度補間に使う。</summary>
         public float PhaseProgress01
@@ -49,18 +56,21 @@ namespace PocketBlaster.Gameplay
             }
         }
 
-        public TargetHitState(float flashDuration, float knockDuration, float downDuration, bool respawns = true)
+        public TargetHitState(float flashDuration, float knockDuration, float downDuration, bool respawns = true, int hitPoints = 1)
         {
             _flashDuration = flashDuration;
             _knockDuration = knockDuration;
             _downDuration = downDuration;
             _respawns = respawns;
+            _remainingHitPoints = hitPoints > 0 ? hitPoints : 1;
         }
 
         /// <returns>実際にヒット処理を開始できたか(反応中の二重ヒットは無視してfalse)</returns>
         public bool TryHit()
         {
             if (CurrentPhase != Phase.Idle) return false;
+            _remainingHitPoints--;
+            _pendingFatalHit = _remainingHitPoints <= 0;
             Advance(Phase.Flash);
             return true;
         }
@@ -73,7 +83,10 @@ namespace PocketBlaster.Gameplay
             switch (CurrentPhase)
             {
                 case Phase.Flash:
-                    if (_elapsedInPhase >= _flashDuration) Advance(Phase.KnockDown);
+                    if (_elapsedInPhase >= _flashDuration)
+                    {
+                        Advance(_pendingFatalHit ? Phase.KnockDown : Phase.Idle);
+                    }
                     break;
                 case Phase.KnockDown:
                     if (_elapsedInPhase >= _knockDuration) Advance(Phase.Down);

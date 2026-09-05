@@ -18,6 +18,11 @@ namespace PocketBlaster.Gameplay
     /// PlayerLocomotionがRigからのローカルオフセットとして動かすため、同じTransformの
     /// 同じプロパティを2つのスクリプトが取り合わないようにする。`moveTarget`未指定時は
     /// 従来通りカメラ自身を動かす。
+    ///
+    /// 得点(docs/requirements.md §8 将来の拡張)は、このステージ内のTarget.OnDefeatedを
+    /// 全部購読しているのでここに乗せている(Target.PointValueの合計、ScoreState参照)。
+    /// ハイスコアはシーン名ごとにPlayerPrefsへ保存する(ステージをまたいだ通算スコアでは
+    /// なく、ステージ単体のベスト記録)。
     /// </summary>
     public class StageDirector : MonoBehaviour
     {
@@ -34,6 +39,8 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
 
         private StageProgressState _progress;
+        private ScoreState _score;
+        private string _highScorePrefsKey;
         private UIDocument _uiDocument;
         private PanelSettings _panelSettings;
         private Label _waveLabel;
@@ -42,6 +49,9 @@ namespace PocketBlaster.Gameplay
         {
             if (stageCamera == null) stageCamera = Camera.main;
             if (moveTarget == null) moveTarget = stageCamera.transform;
+
+            _score = new ScoreState();
+            _highScorePrefsKey = $"PocketBlaster.HighScore.{gameObject.scene.name}";
 
             var enemyCounts = new int[waves.Length];
             for (var i = 0; i < waves.Length; i++)
@@ -82,8 +92,10 @@ namespace PocketBlaster.Gameplay
             }
         }
 
-        private void HandleEnemyDefeated()
+        private void HandleEnemyDefeated(Target defeatedTarget)
         {
+            _score.AddPoints(defeatedTarget.PointValue);
+
             var wave = waves[_progress.CurrentWaveIndex];
             var waveCleared = _progress.NotifyEnemyDefeated();
             UpdateWaveLabel();
@@ -118,12 +130,24 @@ namespace PocketBlaster.Gameplay
         private void UpdateWaveLabel()
         {
             _waveLabel.text = $"ウェーブ {_progress.CurrentWaveIndex + 1}/{_progress.WaveCount}" +
-                               $"  残り敵: {_progress.RemainingInCurrentWave}";
+                               $"  残り敵: {_progress.RemainingInCurrentWave}\n" +
+                               $"スコア: {_score.TotalScore}";
         }
 
         private void ShowStageClear()
         {
-            _waveLabel.text = "ステージクリア！";
+            var previousHighScore = PlayerPrefs.GetInt(_highScorePrefsKey, 0);
+            var isNewHighScore = _score.TotalScore > previousHighScore;
+            if (isNewHighScore)
+            {
+                PlayerPrefs.SetInt(_highScorePrefsKey, _score.TotalScore);
+                PlayerPrefs.Save();
+            }
+
+            var highScoreLine = isNewHighScore
+                ? $"ハイスコア更新！ {_score.TotalScore}"
+                : $"スコア: {_score.TotalScore}（ハイスコア: {previousHighScore}）";
+            _waveLabel.text = $"ステージクリア！\n{highScoreLine}";
         }
 
         private void BuildUi()

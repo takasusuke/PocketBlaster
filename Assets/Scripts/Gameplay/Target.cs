@@ -24,11 +24,18 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private float knockbackAngleDegrees = 70f;
         [SerializeField] private bool respawnsAfterDefeat = true;
         [SerializeField] private Color juiceColor = Color.red;
+        [SerializeField] private int hitPoints = 1;
+        [SerializeField] private int pointValue = 100;
 
         /// <summary>撃たれるたびに呼ばれる(復帰する場合も含む)</summary>
         public event System.Action OnHit;
-        /// <summary>倒された後に復帰しない設定(respawnsAfterDefeat=false)の時、退場が確定した瞬間に1回だけ呼ばれる</summary>
-        public event System.Action OnDefeated;
+        /// <summary>
+        /// 倒された後に復帰しない設定(respawnsAfterDefeat=false)の時、退場が確定した瞬間に
+        /// 1回だけ呼ばれる。引数は自分自身(StageDirectorが得点計算にPointValueを使う)。
+        /// </summary>
+        public event System.Action<Target> OnDefeated;
+
+        public int PointValue => pointValue;
 
         private Transform _visual;
         private Renderer _renderer;
@@ -49,7 +56,7 @@ namespace PocketBlaster.Gameplay
             _baseColor = _renderer.material.color;
             _baseRotation = _visual.localRotation;
             _knockedRotation = _baseRotation * Quaternion.Euler(knockbackAngleDegrees, 0f, 0f);
-            _state = new TargetHitState(flashDurationSeconds, knockDurationSeconds, downDurationSeconds, respawnsAfterDefeat);
+            _state = new TargetHitState(flashDurationSeconds, knockDurationSeconds, downDurationSeconds, respawnsAfterDefeat, hitPoints);
         }
 
         public void TakeHit()
@@ -71,7 +78,7 @@ namespace PocketBlaster.Gameplay
                 _hasFiredDefeated = true;
                 if (_collider != null) _collider.enabled = false;
                 _renderer.enabled = false;
-                OnDefeated?.Invoke();
+                OnDefeated?.Invoke(this);
             }
         }
 

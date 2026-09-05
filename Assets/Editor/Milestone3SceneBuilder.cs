@@ -54,6 +54,7 @@ namespace PocketBlaster.EditorTools
             locomotionSo.FindProperty("movableRoot").objectReferenceValue = cameraGo.transform;
             locomotionSo.FindProperty("aimSource").objectReferenceValue = reticleController;
             locomotionSo.ApplyModifiedPropertiesWithoutUndo();
+            rigGo.AddComponent<GameSession>();
 
             var dir = Path.GetDirectoryName(ScenePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))

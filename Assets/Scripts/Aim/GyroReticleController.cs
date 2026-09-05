@@ -1,3 +1,4 @@
+using System;
 using PocketBlaster.Audio;
 using PocketBlaster.Gameplay;
 using PocketBlaster.Networking;
@@ -36,6 +37,13 @@ namespace PocketBlaster.Aim
         [SerializeField] private Camera aimCamera;
         [SerializeField] private LayerMask hitLayerMask = ~0;
         [SerializeField] private float maxHitDistance = 1000f;
+
+        /// <summary>
+        /// 狙って撃った結果(true=命中、false=はずれ)。難易度モード(GameSession)が
+        /// アーケードモードでの残機判定に使う。弾切れでの空撃ちはここでは発火しない
+        /// (狙いの結果ではなく弾数の運用ミスなので、残機には数えない設計)。
+        /// </summary>
+        public event Action<bool> OnShotResolved;
 
         private PhoneControllerServer _server;
         private AmmoState _ammo;
@@ -144,7 +152,9 @@ namespace PocketBlaster.Aim
             }
 
             _audioSource.PlayOneShot(_shotClip);
-            _lastShotResult = TryHitTargetAtReticle() ? "命中" : "はずれ";
+            var didHit = TryHitTargetAtReticle();
+            _lastShotResult = didHit ? "命中" : "はずれ";
+            OnShotResolved?.Invoke(didHit);
         }
 
         /// <summary>
