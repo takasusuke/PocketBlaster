@@ -114,6 +114,8 @@ namespace PocketBlaster.Aim
 
         private static readonly Color AmmoPipFilledColor = new Color(1f, 0.75f, 0.15f);
         private static readonly Color AmmoPipEmptyColor = new Color(1f, 1f, 1f, 0.18f);
+        private static readonly Color AimReticleColor = new Color(1f, 0.2f, 0.2f, 0.9f);
+        private static readonly Color LookCursorColor = new Color(0.3f, 0.9f, 1f, 0.85f);
 
         private void Awake()
         {
@@ -195,13 +197,16 @@ namespace PocketBlaster.Aim
             // 「構えている間は照準を動かして、構えていない間は移動する」— 傾きは1系統しか
             // 無いため、狙いと移動のどちらに使うかをボタンで切り替える。PlayerLocomotion
             // 参照)。マウスデバッグは実機の代役なので、この切り替えの影響を受けない。
-            // 構えていない間はレティクルを更新しない(最後の位置に凍結、半透明にして
-            // 「今は狙えない」ことを示す)。
+            //
+            // 構えていない間も「今向いている方向」を示すカーソルを画面中央に表示する
+            // (オーナー要望、2026-09-06:「構えていない時も、向いている方向を示すために
+            // カーソルを表示してほしいです」)。構えていない間はPlayerLocomotionが
+            // カメラ自体を回転させる設計のため、画面中央=カメラの正面=現在向いている
+            // 方向と一致する。狙い(赤)と見た目で区別できるよう色を変える。
             var isAimActive = IsMouseDebugActive || _server.IsAiming;
-            _reticle.style.opacity = isAimActive ? 1f : 0.35f;
+            SetReticleColor(isAimActive ? AimReticleColor : LookCursorColor);
 
-            var x = _reticleScreenX;
-            var y = _reticleScreenY;
+            float x, y;
             if (isAimActive)
             {
                 if (IsMouseDebugActive)
@@ -218,12 +223,17 @@ namespace PocketBlaster.Aim
                     x = Mathf.Clamp(halfW + _offsetX, 0, Screen.width);
                     y = Mathf.Clamp(halfH + _offsetY, 0, Screen.height);
                 }
-
-                _reticleScreenX = x;
-                _reticleScreenY = y;
-                _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
-                _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
             }
+            else
+            {
+                x = Screen.width / 2f;
+                y = Screen.height / 2f;
+            }
+
+            _reticleScreenX = x;
+            _reticleScreenY = y;
+            _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
+            _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
 
             // リロードアニメーション(オーナー要望、2026-09-06:「リロードアニメーションを
             // 実装して」)。レティクルの真下に進捗バーを追従表示する — レティクル自体は
@@ -402,6 +412,14 @@ namespace PocketBlaster.Aim
             _ammo.IncreaseMagazineSize(amount);
         }
 
+        private void SetReticleColor(Color color)
+        {
+            _reticle.style.borderLeftColor = color;
+            _reticle.style.borderRightColor = color;
+            _reticle.style.borderTopColor = color;
+            _reticle.style.borderBottomColor = color;
+        }
+
         private void HandleReload()
         {
             // 手動リロード("reload"メッセージ・フリックジェスチャー)は、再キャリブレーション
@@ -464,11 +482,7 @@ namespace PocketBlaster.Aim
             _reticle.style.borderRightWidth = 3;
             _reticle.style.borderTopWidth = 3;
             _reticle.style.borderBottomWidth = 3;
-            var reticleColor = new Color(1f, 0.2f, 0.2f, 0.9f);
-            _reticle.style.borderLeftColor = reticleColor;
-            _reticle.style.borderRightColor = reticleColor;
-            _reticle.style.borderTopColor = reticleColor;
-            _reticle.style.borderBottomColor = reticleColor;
+            SetReticleColor(AimReticleColor);
             root.Add(_reticle);
 
             // リロード進捗バー(オーナー要望、2026-09-06:「リロードアニメーションを実装して」)。

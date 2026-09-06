@@ -45,7 +45,9 @@ namespace PocketBlaster.Gameplay
     {
         [SerializeField] private Transform movableRoot;
         [SerializeField] private GyroReticleController aimSource;
-        [SerializeField] private float stepDistance = 0.3f;
+        // オーナー要望2026-09-06「プレイヤーの移動速度を速めてください」を受けて
+        // 0.3→0.7に引き上げた(1歩ぶんの移動距離)。
+        [SerializeField] private float stepDistance = 0.7f;
         [SerializeField] private float maxOffsetRadius = 9f;
         [SerializeField] private float moveTiltDeadzoneDegrees = 5f;
         [SerializeField] private float moveTiltMaxDegrees = 30f;
@@ -61,8 +63,26 @@ namespace PocketBlaster.Gameplay
         private float _lookYaw;
         private float _lookPitch;
 
+        private bool _isInitialized;
+
         private void Awake()
         {
+            EnsureInitialized();
+        }
+
+        /// <summary>
+        /// Unityは異なるコンポーネント間でのAwake()の実行順序を保証しない。
+        /// StageDirector.Awake()がStartNextWave()経由でこちらのResetForNewWave()を
+        /// 呼ぶ時、このコンポーネント自身のAwake()がまだ実行されていない場合があり、
+        /// _offsetStateが未初期化のままNullReferenceExceptionになっていた
+        /// (2026-09-06、オーナー報告)。Awake()からもResetForNewWave()からも呼べる
+        /// 初期化をここにまとめ、二重実行を防ぐ。
+        /// </summary>
+        private void EnsureInitialized()
+        {
+            if (_isInitialized) return;
+            _isInitialized = true;
+
             // GetComponentではなくGetOrCreate() — PhoneControllerServerはシーンをまたぐ
             // 永続シングルトン(2026-09-06、再挑戦での接続断対応。PhoneControllerServer.cs参照)。
             _server = PhoneControllerServer.GetOrCreate();
@@ -87,6 +107,7 @@ namespace PocketBlaster.Gameplay
         /// </summary>
         public void ResetForNewWave()
         {
+            EnsureInitialized();
             _offsetState.Reset();
             _lookYaw = 0f;
             _lookPitch = 0f;
@@ -114,9 +135,15 @@ namespace PocketBlaster.Gameplay
             var pitchInput = ApplyDeadzone(Mathf.DeltaAngle(_lookRefBeta, _server.LatestBeta));
             if (yawInput == 0f && pitchInput == 0f) return;
 
+            // 符号はGyroReticleControllerの照準マッピング(betaDelta*sensitivityで
+            // そのままオフセットに加算)と揃えてある。ここを反転させると、構えている
+            // 時と構えていない時とで同じ持ち方・同じ傾け方なのに上下が逆に感じられる
+            // ("反転設定が反映されていないように見える"というオーナー報告の原因はこれ
+            // だった。webapp側の反転設定自体は正しく両方に効いていた——構えていない
+            // 間のUnity側マッピングだけがずれていた)。
             var lookSensitivity = GameSettings.Current.LookSensitivity;
             _lookYaw += yawInput * lookSensitivity * Time.deltaTime;
-            _lookPitch = Mathf.Clamp(_lookPitch - pitchInput * lookSensitivity * Time.deltaTime, -maxLookPitchDegrees, maxLookPitchDegrees);
+            _lookPitch = Mathf.Clamp(_lookPitch + pitchInput * lookSensitivity * Time.deltaTime, -maxLookPitchDegrees, maxLookPitchDegrees);
             movableRoot.localRotation = Quaternion.Euler(_lookPitch, _lookYaw, 0f);
         }
 

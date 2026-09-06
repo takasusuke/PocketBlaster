@@ -27,6 +27,41 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
    （「ダブルクリックでシーンが開く」という一般的な理解は、少なくともこの起動経路
    （`Start-Process`での直接起動）には当てはまらなかった）
 
+## クラッシュ修正・上下反転の食い違い修正・視線カーソル・移動速度・床グリッド（2026-09-06）
+
+- **NullReferenceExceptionの修正（オーナー報告）**: `StageDirector.Awake()`が
+  `StartNextWave()`経由で`PlayerLocomotion.ResetForNewWave()`を呼ぶが、Unityは
+  異なるコンポーネント間の`Awake()`実行順序を保証しないため、`PlayerLocomotion`
+  自身の`Awake()`がまだ実行されておらず`_offsetState`が未初期化のまま
+  `NullReferenceException`になっていた。`EnsureInitialized()`にまとめ、
+  `Awake()`からも`ResetForNewWave()`からも安全に呼べるようにした(二重初期化防止つき)。
+- **上下反転の食い違いを修正（オーナー報告「構えているときの上下左右の反転の設定が、
+  構えていない時に反映されていないように思えます」）**: webapp側の反転設定自体は
+  正しく両方の入力に効いていたが、`PlayerLocomotion`の視界回転(ピッチ)の符号が
+  `GyroReticleController`の照準マッピングと逆になっていた(`_lookPitch - pitchInput...`
+  になっていた箇所を`+`に修正)。同じ持ち方・同じ傾け方なのに、構えている時と
+  構えていない時とで上下が逆に感じられていた真因はこれ。
+- **構えていない時の視線カーソル（オーナー要望「構えていない時も、向いている方向を
+  示すためにカーソルを表示してほしいです」）**: `GyroReticleController`が、構えて
+  いない間はレティクルを画面中央に固定して表示するようにした。構えていない間は
+  `PlayerLocomotion`がカメラ自体を回転させる設計のため、画面中央＝現在向いている
+  方向と一致する。狙い(赤)と見た目で区別できるよう水色に変える。
+- **移動速度を引き上げ（オーナー要望「プレイヤーの移動速度を速めてください」）**:
+  `PlayerLocomotion.stepDistance`を0.3→0.7に引き上げた。
+- **床にグリッドを追加（オーナー要望「移動している量が分かるように床にグリッドなど
+  をつけてほしいです」）**: `GroundFactory`(新規、Editor)が手続き生成した格子模様の
+  テクスチャを貼った床(Planeプリミティブ)を`Milestone4_Stage`・`Stage2_BossRush`
+  それぞれのステージ全体をカバーするサイズで敷いた。
+- **作業メモ（この日の後半、Windows PowerShellが応答不能になった）**: 原因不明の
+  理由でこのマシンの`powershell.exe`自体が(このセッションのツール経由でも、Bashから
+  直接起動しても)ハングするようになり、通常使っている`scripts/run-unity.ps1`
+  経由のUnityバッチ実行ができなくなった。`scripts/heavy_lock.py`はPythonスクリプト
+  なのでBash経由で直接呼び出せることを確認し、`python heavy_lock.py -- "<Unity.exeの
+  パス>" -batchmode ...`の形でロック付きのUnityバッチ実行を代替した(この後の
+  検証はすべてこの方法で行った)。`run-unity.ps1`が持つ追加の安全機構(隣接プロジェクトの
+  Unity検知・出力の再取得リトライ等)は今回使えていない点に注意——次回セッションで
+  PowerShellが復旧しているか確認すること。
+
 ## 撃てないバグの再修正・感度分離・視界回転への設計変更（2026-09-06）
 
 - **バグ再修正（オーナー報告「構えたボタンは長押しにしたままで、撃つボタンを押す

@@ -67,6 +67,10 @@ namespace PocketBlaster.EditorTools
             light.intensity = 1.1f;
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
+            // 移動している量が分かるように床にグリッドを敷く(オーナー要望、2026-09-06)。
+            // 全ウェーブの奥行き(z=0〜26)をカバーする大きさにしてある。
+            GroundFactory.CreateGrid("Ground", new Vector3(0f, 0f, 13f), 45f);
+
             // 敵はもっと遠く・小さく出す(オーナー要望、2026-09-06:「敵はもっともっと遠くて
             // 小さいところから出てくるイメージです」、以前はz=14-16・scale1.4-2.2)。
             // 被弾可能回数・移動速度・移動パターン(蛇行するか)は種類ごとにEnemyFactory側で
