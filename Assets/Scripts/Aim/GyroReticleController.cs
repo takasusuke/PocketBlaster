@@ -49,12 +49,19 @@ namespace PocketBlaster.Aim
         /// <summary>
         /// PC上でマウスでも狙えるようにする(オーナー要望、2026-09-06:「あくまでデバッグを
         /// 容易にするため」)。実機(スマホ)が無くてもPlay Modeだけで狙撃・命中判定を
-        /// 試せるようにする、開発用の割り切り。有効な間はマウス座標が常にジャイロより
-        /// 優先する(ジャイロの計算自体は止めない — 実機を同時につないでいる場合の
-        /// デバッグ表示はそのまま見える)。実機での本番テストで邪魔になる場合は
-        /// Inspectorでオフにする。
+        /// 試せるようにする、開発用の割り切り。<see cref="IsMouseDebugActive"/>参照 —
+        /// スマホが接続されている間は自動的に無効化され、常にスマホ側が優先される
+        /// (2026-09-06、オーナー報告: 当初は常時マウス優先にしていたため実機での照準が
+        /// 効かなくなっていた)。
         /// </summary>
         [SerializeField] private bool enableMouseDebugAim = true;
+
+        /// <summary>
+        /// マウスデバッグが実際に有効か。設定がオンでも、スマホが接続されている間は
+        /// スマホ側の入力を奪わないよう常にfalseになる — 「スマホが無い時の代役」に
+        /// 限定するため。
+        /// </summary>
+        private bool IsMouseDebugActive => enableMouseDebugAim && (_server == null || !_server.IsConnected);
 
         /// <summary>
         /// 狙って撃った結果(true=命中、false=はずれ)。難易度モード(GameSession)が
@@ -124,12 +131,11 @@ namespace PocketBlaster.Aim
 
         private void Update()
         {
-            // マウスデバッグ(enableMouseDebugAim)が有効な間は、スマホを一切使わずに
-            // 試せるように、最初のクリックで自動的にキャリブレーション済み扱いにする
-            // (オーナー要望、2026-09-06:「マウスクリックがあれば敵の動き出しが開始する
-            // ようにもしてください」— EnemyApproachはIsCalibratedを見て動き出すため、
-            // ここでtrueにするだけで敵の接近もあわせて始まる)。
-            if (enableMouseDebugAim && !_isCalibrated && Input.GetMouseButtonDown(0))
+            // マウスデバッグ(enableMouseDebugAim)は「スマホが無い時の代役」に限定する。
+            // スマホが接続されている間は常にスマホ側を優先し、マウスには一切判定を
+            // 持たせない(2026-09-06、オーナー報告: 常時マウス優先にしていたら実機での
+            // 照準が効かなくなった)。IsMouseDebugActiveを参照。
+            if (IsMouseDebugActive && !_isCalibrated && Input.GetMouseButtonDown(0))
             {
                 Recenter();
             }
@@ -164,7 +170,7 @@ namespace PocketBlaster.Aim
             _offsetY = betaDelta * degreesToScreenPixels;
 
             float x, y;
-            if (enableMouseDebugAim)
+            if (IsMouseDebugActive)
             {
                 // UI Toolkitは左上原点・下方向がプラスだが、Input.mousePositionは
                 // 左下原点・上方向がプラスなのでYを反転する。
@@ -184,7 +190,7 @@ namespace PocketBlaster.Aim
             _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
             _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
 
-            if (enableMouseDebugAim && Input.GetMouseButtonDown(0))
+            if (IsMouseDebugActive && Input.GetMouseButtonDown(0))
             {
                 HandleShoot();
             }
