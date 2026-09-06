@@ -124,6 +124,16 @@ namespace PocketBlaster.Aim
 
         private void Update()
         {
+            // マウスデバッグ(enableMouseDebugAim)が有効な間は、スマホを一切使わずに
+            // 試せるように、最初のクリックで自動的にキャリブレーション済み扱いにする
+            // (オーナー要望、2026-09-06:「マウスクリックがあれば敵の動き出しが開始する
+            // ようにもしてください」— EnemyApproachはIsCalibratedを見て動き出すため、
+            // ここでtrueにするだけで敵の接近もあわせて始まる)。
+            if (enableMouseDebugAim && !_isCalibrated && Input.GetMouseButtonDown(0))
+            {
+                Recenter();
+            }
+
             // 初回は自動でキャリブレーションせず、明示的な画面を出して「リロード」操作を
             // 待つ(オーナー要望、2026-09-06: 接続直後の姿勢をそのまま基準にしてしまうと、
             // ボタンを押す動作中の不安定な向きが基準になりかねないため)。
