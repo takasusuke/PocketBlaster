@@ -1,4 +1,5 @@
 using PocketBlaster.Aim;
+using PocketBlaster.Meta;
 using PocketBlaster.Networking;
 using PocketBlaster.UI;
 using UnityEngine;
@@ -13,8 +14,9 @@ namespace PocketBlaster.Gameplay
     /// ノーカウント)と、「敵に近づかれ過ぎた」(StageDirector.OnEnemyReachedPlayer、
     /// EnemyApproach参照、2026-09-06追加)。どちらもアーケードモードでのみ残機を減らす。
     ///
-    /// モードはスマホ側(webapp/index.html、接続直後に"mode"メッセージ)で選ぶ。
-    /// 未選択のまま(メッセージが来る前)はカジュアル扱い — 何もフェールしない安全側の既定。
+    /// モードは起動画面(Title、TitleScreenController)で選び、GameSettings(PlayerPrefs)
+    /// 経由でシーンをまたいで受け渡される(2026-09-06、以前はスマホ側の接続直後の
+    /// "mode"メッセージで選んでいたが、起動画面の新設に伴いPC側へ一本化した)。
     ///
     /// スマホ側からの一時停止・再挑戦(オーナー要望、2026-09-06)もここで扱う。
     /// 一時停止はTime.timeScaleを0/1で切り替えるだけ(ジャイロ移動・敵の接近・カメラの
@@ -53,7 +55,9 @@ namespace PocketBlaster.Gameplay
             if (reticleController == null) reticleController = GetComponent<GyroReticleController>();
             if (stageDirector == null) stageDirector = FindFirstObjectByType<StageDirector>();
 
-            _server.OnModeSelected += HandleModeSelected;
+            _mode = GameSettings.Current.IsArcadeMode ? Mode.Arcade : Mode.Casual;
+            _lives = _mode == Mode.Arcade ? new LivesState(startingLives) : null;
+
             _server.OnPauseToggleRequested += HandlePauseToggleRequested;
             _server.OnRetryRequested += HandleRetryRequested;
             if (reticleController != null) reticleController.OnShotResolved += HandleShotResolved;
@@ -67,7 +71,6 @@ namespace PocketBlaster.Gameplay
         {
             if (_server != null)
             {
-                _server.OnModeSelected -= HandleModeSelected;
                 _server.OnPauseToggleRequested -= HandlePauseToggleRequested;
                 _server.OnRetryRequested -= HandleRetryRequested;
             }
@@ -94,15 +97,6 @@ namespace PocketBlaster.Gameplay
         {
             Time.timeScale = 1f;
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-        }
-
-        private void HandleModeSelected(string modeName)
-        {
-            _mode = modeName == "arcade" ? Mode.Arcade : Mode.Casual;
-            _lives = _mode == Mode.Arcade ? new LivesState(startingLives) : null;
-            _isGameOver = false;
-            if (reticleController != null) reticleController.enabled = true;
-            UpdateLabel();
         }
 
         private void HandleShotResolved(bool didHit)

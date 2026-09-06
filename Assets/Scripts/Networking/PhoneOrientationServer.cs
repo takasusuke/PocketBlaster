@@ -36,7 +36,6 @@ namespace PocketBlaster.Networking
             public double alpha;
             public double beta;
             public double gamma;
-            public string mode; // type=="mode"の時だけ使う("arcade" / "casual")
         }
 
         private readonly int _port;

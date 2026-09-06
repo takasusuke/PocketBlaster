@@ -27,6 +27,32 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
    （「ダブルクリックでシーンが開く」という一般的な理解は、少なくともこの起動経路
    （`Start-Process`での直接起動）には当てはまらなかった）
 
+## 起動画面（2026-09-06、実装済み・未検証）
+
+「起動画面を実装して。そこから難易度選択や設定などができるようにして」（オーナー要望）。
+
+- 新規シーン`Assets/Scenes/Title.unity`（`Assets/Editor/TitleSceneBuilder.cs`の
+  `-executeMethod`または「PocketBlaster > Build Title Scene」で生成）を追加。
+  `TitleScreenController`が全て(UI Toolkit)をコードから組み立てる、`PhoneControllerServer`
+  非依存の画面 — スマホを一切つながなくてもマウスだけで完結する。
+- 選べる項目: 難易度（カジュアル/アーケード）・SE音量（0-100%）・感度
+  （`degreesToScreenPixels`相当、4-24の範囲、`GameSettingsState`が妥当性を保証）。
+  「ステージ1」「ステージ2（ボスラッシュ）」ボタンでそれぞれ`Milestone4_Stage`/
+  `Stage2_BossRush`へ`SceneManager.LoadScene`で遷移する。
+- 選択内容は`Assets/Scripts/Meta/GameSettings.cs`（PlayerPrefs）に保存され、シーンを
+  またいで（次回起動時も）覚えている。純粋な値検証部分は`GameSettingsState`に切り出し、
+  EditModeテスト(`GameSettingsStateTests.cs`)で担保している。
+- **難易度モードの選択場所をスマホ側→PC側(起動画面)へ一本化した**。以前は
+  `webapp/index.html`の接続前ラジオボタン("mode"メッセージ)で選んでいたが、起動画面と
+  二重に持たせると混乱するため、スマホ側の当該UI・メッセージ・
+  `PhoneControllerServer.OnModeSelected`・`GameSession.HandleModeSelected`は全て削除した。
+  `GameSession`は`Awake()`で`GameSettings.Current.IsArcadeMode`を直接読む。
+- `GyroReticleController`は`Awake()`で`GameSettings.Current.Sensitivity`/`SfxVolume`を
+  読んで`degreesToScreenPixels`/`AudioSource.volume`に反映する。
+- **未検証（重要）**: 起動画面自体をPlay Modeで実際に操作して見た目・操作感を確認したのは
+  まだ誰もいない。スライダーの表示・ボタンのクリック判定・ステージ遷移が実際に機能するか、
+  Titleシーンを開いてPlay Modeで確認してほしい。
+
 ## 実機プレイ中に踏んだバグの修正（2026-09-06）
 
 - **`JuiceSplashEffect`のパーティクル生成エラー**: 命中時に

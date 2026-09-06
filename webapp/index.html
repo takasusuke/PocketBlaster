@@ -47,13 +47,6 @@
   #axisSettings summary { cursor: pointer; font-size: 15px; }
   #axisSettings .row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
   #axisSettings select { font-size: 14px; padding: 4px; }
-  #modeSettings {
-    width: 100%; max-width: 360px; box-sizing: border-box;
-    background: #16161f; border-radius: 12px; padding: 12px 16px;
-    font-size: 14px; text-align: left;
-  }
-  #modeSettings summary { cursor: pointer; font-size: 15px; }
-  #modeSettings .row { margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -83,15 +76,6 @@
     <div class="row">
       <label for="invertHorizontal">左右を反転する</label>
       <input type="checkbox" id="invertHorizontal">
-    </div>
-  </details>
-  <details id="modeSettings">
-    <summary>難易度モード</summary>
-    <div class="row">
-      <label><input type="radio" name="mode" value="casual" checked> カジュアル（無制限、はずれても平気）</label>
-    </div>
-    <div class="row">
-      <label><input type="radio" name="mode" value="arcade"> アーケード（残機制、はずすと残機が減る）</label>
     </div>
   </details>
   <button id="connectBtn">接続する</button>
@@ -183,8 +167,6 @@
       reloadBtn.disabled = false;
       pauseBtn.disabled = false;
       retryBtn.disabled = false;
-      var selectedMode = document.querySelector('input[name="mode"]:checked');
-      ws.send(JSON.stringify({ type: 'mode', mode: selectedMode ? selectedMode.value : 'casual' }));
     };
     ws.onclose = function () {
       setStatus('切断されました。もう一度「接続する」を押してください', 'error');

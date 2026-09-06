@@ -18,7 +18,9 @@ namespace PocketBlaster.UI
         private static Font _builtinFont;
         private static bool _lookedUpFont;
 
-        public static void ApplyDefaultFont(Label label)
+        // Label・Button等、テキストを持つ要素はすべてTextElementを継承しているため
+        // ここで一括して受ける(起動画面のButton/Sliderラベルでも同じ問題が起きるため)。
+        public static void ApplyDefaultFont(TextElement element)
         {
             if (!_lookedUpFont)
             {
@@ -29,13 +31,13 @@ namespace PocketBlaster.UI
                 _builtinFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 if (_builtinFont == null)
                 {
-                    Debug.LogWarning("[RuntimeLabelStyle] 組み込みフォントが見つかりませんでした。Labelのテキストが描画されない可能性があります。");
+                    Debug.LogWarning("[RuntimeLabelStyle] 組み込みフォントが見つかりませんでした。テキストが描画されない可能性があります。");
                 }
             }
 
             if (_builtinFont != null)
             {
-                label.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(_builtinFont));
+                element.style.unityFontDefinition = new StyleFontDefinition(FontDefinition.FromFont(_builtinFont));
             }
         }
     }

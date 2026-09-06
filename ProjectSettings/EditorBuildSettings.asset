@@ -17,5 +17,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Stage2_BossRush.unity
     guid: 5cfb255e6eb2bba4b95b56ae54ea4513
+  - enabled: 1
+    path: Assets/Scenes/Title.unity
+    guid: bb6a8522c9e99f643a65e64bc7a6a80d
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

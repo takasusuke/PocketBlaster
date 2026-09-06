@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using PocketBlaster.Audio;
 using PocketBlaster.Gameplay;
+using PocketBlaster.Meta;
 using PocketBlaster.Networking;
 using PocketBlaster.UI;
 using UnityEngine;
@@ -110,7 +111,11 @@ namespace PocketBlaster.Aim
             _server.OnReload += HandleReload;
             _server.OnShoot += HandleShoot;
 
+            // 起動画面(Title)で選んだ感度・SE音量を適用する(2026-09-06)。
+            degreesToScreenPixels = GameSettings.Current.Sensitivity;
+
             _audioSource = GetComponent<AudioSource>();
+            _audioSource.volume = GameSettings.Current.SfxVolume;
             _shotClip = ProceduralSfx.CreateTone("sfx_shot", 880f, 0.05f, 0.03f);
             _hitClip = ProceduralSfx.CreateTone("sfx_hit", 440f, 0.15f, 0.1f);
             _missClip = ProceduralSfx.CreateTone("sfx_miss", 220f, 0.08f, 0.06f);
