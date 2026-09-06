@@ -17,6 +17,48 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## マルチプレイヤーモード新設（2026-09-07）
+
+オーナーへ将来拡張として2方向（a: 画面分割+各自移動、b: 画面共有+移動オート+各自
+レティクル）を提示し、「bで進めて」と承認。実装前に`/plan`で方針を確認済み
+（同時接続2人まで・共有体力/残機・新規専用ステージの3点をオーナー確認）。
+
+- **狙撃判定の共通化**: 実装前のリファクタとして、`GyroReticleController.
+  TryHitTargetAtReticle`のRaycastAll→HeadHitbox優先→IShootableフォールバックを
+  `Assets/Scripts/Aim/AimHitResolver.cs`へ切り出した(振る舞いは変えていない)。
+  シングルプレイヤー側で唯一触れた変更——**独立したコミットにして、直後にEditMode
+  全件+Milestone3再ビルドで挙動が変わっていないことを確認してある**。
+- **ネットワーク層**: `PhoneOrientationServer`は元々複数の同時TCP接続を受け付けられる
+  作りだった(`_clientConnected`という単一boolに集約して隠していただけ)。接続ごとに
+  `connectionId`を振り、受信メッセージに付与し、接続/切断を通知し、特定の接続へだけ
+  送信できる`SendText`を追加した(Unity→スマホの送信は今回が初めて)。
+  `PhoneControllerServer`はシングルプレイヤー用の既存イベント・プロパティを一切
+  変更せず、`OnPlayerConnected`/`OnPlayerDisconnected`/`OnPlayerReload`/
+  `OnPlayerShoot`/`Players`/`SendToPlayer`を追加しただけ。
+- **`PlayerSlotAssigner`**(新規、純粋C#+EditModeテスト6件): 接続順にスロット0/1
+  (赤/青)を割り当て、切断で解放する。
+- **`MultiplayerAimController`**(新規): プレイヤー接続ごとに動的生成/破棄される、
+  1人ぶんの狙い・弾薬・色付きレティクル。「構える/構えない」の切り替えは無い
+  (移動が自動のため傾きは常に照準)。
+- **`MultiplayerStageDirector`**(新規): シングルプレイヤーの`StageDirector`
+  (ウェーブ管理)と`GameSession`(一時停止・再挑戦・体力)の責務を統合。削除済み
+  だった`StageDirector.MoveCameraTo`(ウェーブ間カメラLerp移動)をこのクラス専用に
+  復活させ、「移動オート」を実現した。体力・スコアはプレイヤー個別ではなく共有。
+- **新規シーン`MultiplayerCoop`**(`MultiplayerCoopSceneBuilder`): 4ウェーブの
+  専用敵配置。`PlayerLocomotion`/`GyroReticleController`/`GameSession`は置かない。
+  起動画面に4つ目の開始ボタンとして追加。
+- **webapp**: `ws.onmessage`を新設(従来は一切受信していなかった)。
+  `{"type":"welcome","color":"red"}`で自分の色をバッジ表示、`{"type":"full"}`で
+  満員を表示。送信メッセージ(`orientation`/`reload`/`shoot`)自体は変更不要。
+- **既知の制約(v1スコープ外、docs/requirements.md §8参照)**: アイテム(Pickup)、
+  プレイヤーごとの感度設定、3人以上・画面分割方式。
+- **確認方法**: EditMode 68件(既存62+新規6)全て通過。Milestone3/4・Stage2・
+  PracticeRange・MultiplayerCoopを再ビルド/新規ビルドし、シーンYAML上で意図した
+  内容を確認した。**実機(2台の実スマホ)での接続・プレイ確認は本セッションでは
+  実施不可**——次回実機で試す時は、`EnemyApproach`がスマホの接続/キャリブレーション
+  を待たずに敵接近を始める(シングルプレイヤー用の待機ゲートが
+  `GyroReticleController`前提のため、このシーンには効かない)点に注意。
+
 ## 起動画面の背景画像・構えのタップ切り替え化・視点リセット・練習モード拡充（2026-09-06）
 
 - **起動画面の背景画像**（オーナー要望「起動画面の背景に使える一枚絵を作成して

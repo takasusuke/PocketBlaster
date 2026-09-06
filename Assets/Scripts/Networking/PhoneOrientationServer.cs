@@ -24,6 +24,15 @@ namespace PocketBlaster.Networking
     /// ため — 同一Wi-Fi内のLAN IPへのhttp://では、権限ダイアログすら出ずに黙って
     /// 動かない(2026-09-05に実機で確認)。証明書は自己署名で、OSの証明書ストアには
     /// 触れずプロセス内だけで完結させている(SelfSignedCertificate参照)。
+    ///
+    /// `AcceptLoop`は元々、複数の同時TCP接続をスレッドごとに受け付けられる作りだった
+    /// (`_clientConnected`という単一boolに集約して隠していただけ)。マルチプレイヤー
+    /// モード追加(2026-09-07、オーナー承認: 画面共有・移動オート・各自レティクル案)に
+    /// 伴い、これを活かして接続ごとの識別子(`connectionId`)を振り、受信メッセージに
+    /// 付与し、接続/切断を通知し、特定の接続へだけ送信できるようにした
+    /// (Unity→スマホの送信はここが初めて — 従来はpong以外何も送っていなかった)。
+    /// シングルプレイヤー側の呼び出し(`IsClientConnected`・`TryDequeue`)は挙動を
+    /// 変えていない。
     /// </summary>
     public sealed class PhoneOrientationServer
     {
@@ -36,18 +45,35 @@ namespace PocketBlaster.Networking
             public double alpha;
             public double beta;
             public double gamma;
+            /// <summary>JSON側には無いフィールド。受信したWebSocket接続ごとに
+            /// サーバー側で代入する(マルチプレイヤー用、connectionId参照)。</summary>
+            public int connectionId;
+        }
+
+        /// <summary>接続/切断の通知(マルチプレイヤー用)。<see cref="connected"/>が
+        /// falseなら切断。</summary>
+        public struct ConnectionEvent
+        {
+            public int connectionId;
+            public bool connected;
         }
 
         private readonly int _port;
         private readonly string _indexHtmlPath;
         private readonly X509Certificate2 _serverCertificate;
         private readonly ConcurrentQueue<InboundMessage> _inbox = new ConcurrentQueue<InboundMessage>();
+        private readonly ConcurrentQueue<ConnectionEvent> _connectionEvents = new ConcurrentQueue<ConnectionEvent>();
+        private readonly ConcurrentDictionary<int, Stream> _connections = new ConcurrentDictionary<int, Stream>();
+        private readonly ConcurrentDictionary<int, object> _sendLocks = new ConcurrentDictionary<int, object>();
+        private int _nextConnectionId;
         private TcpListener _listener;
         private Thread _acceptThread;
         private volatile bool _running;
-        private volatile bool _clientConnected;
 
-        public bool IsClientConnected => _clientConnected;
+        /// <summary>1つでも接続があればtrue。複数接続(マルチプレイヤー)を数えられるよう
+        /// `_connections`の件数で判定する(単一の切断が他の接続を巻き込んでfalseに
+        /// ならないように——以前は単一boolだったため、この巻き込みが起こり得た)。</summary>
+        public bool IsClientConnected => !_connections.IsEmpty;
 
         public PhoneOrientationServer(int port, string indexHtmlPath, X509Certificate2 serverCertificate)
         {
@@ -73,6 +99,34 @@ namespace PocketBlaster.Networking
         }
 
         public bool TryDequeue(out InboundMessage message) => _inbox.TryDequeue(out message);
+
+        /// <summary>接続/切断の通知を1件取り出す(マルチプレイヤー用)。</summary>
+        public bool TryDequeueConnectionEvent(out ConnectionEvent connectionEvent) =>
+            _connectionEvents.TryDequeue(out connectionEvent);
+
+        /// <summary>
+        /// 特定の接続へテキストフレームを送る(マルチプレイヤー用、プレイヤーへの
+        /// 色割り当て通知等)。対象が既に切断済みなら黙って何もしない——切断検知と
+        /// 送信の間に競合が起きても例外で他の処理を巻き込まないようにするため。
+        /// </summary>
+        public void SendText(int connectionId, string json)
+        {
+            if (!_connections.TryGetValue(connectionId, out var stream)) return;
+            var sendLock = _sendLocks.GetOrAdd(connectionId, _ => new object());
+            try
+            {
+                lock (sendLock)
+                {
+                    SendFrame(stream, 0x1, Encoding.UTF8.GetBytes(json));
+                }
+            }
+            catch (Exception)
+            {
+                // 送信時点で相手が切れていた場合等。HandleClient側のfinallyが
+                // 切断処理(_connectionsからの除去・ConnectionEvent発火)を担うため、
+                // ここでは無視してよい。
+            }
+        }
 
         private void AcceptLoop()
         {
@@ -126,20 +180,28 @@ namespace PocketBlaster.Networking
                     }
 
                     CompleteHandshake(stream, clientKey);
-                    _clientConnected = true;
+
+                    var connectionId = Interlocked.Increment(ref _nextConnectionId);
+                    _connections[connectionId] = stream;
+                    _connectionEvents.Enqueue(new ConnectionEvent { connectionId = connectionId, connected = true });
                     try
                     {
-                        ReadFrameLoop(stream);
+                        ReadFrameLoop(stream, connectionId);
                     }
                     finally
                     {
-                        _clientConnected = false;
+                        // ここへ来る時点でreturn/例外のどちらでも接続は終わっているので、
+                        // 後始末はこの1箇所だけで行う(呼び出し元でも二重に行わない)。
+                        _connections.TryRemove(connectionId, out _);
+                        _sendLocks.TryRemove(connectionId, out _);
+                        _connectionEvents.Enqueue(new ConnectionEvent { connectionId = connectionId, connected = false });
                     }
                 }
             }
             catch (Exception)
             {
-                _clientConnected = false;
+                // ハンドシェイク前(SSL認証・ヘッダー読み取り等)の失敗はここに来るが、
+                // その時点では_connectionsに登録していないため後始末は不要。
             }
         }
 
@@ -235,7 +297,7 @@ namespace PocketBlaster.Networking
             stream.Flush();
         }
 
-        private void ReadFrameLoop(Stream stream)
+        private void ReadFrameLoop(Stream stream, int connectionId)
         {
             while (_running)
             {
@@ -246,7 +308,7 @@ namespace PocketBlaster.Networking
                 {
                     case 0x1: // text
                         var json = Encoding.UTF8.GetString(payload);
-                        TryEnqueueJson(json);
+                        TryEnqueueJson(json, connectionId);
                         break;
                     case 0x8: // close
                         return;
@@ -259,13 +321,14 @@ namespace PocketBlaster.Networking
             }
         }
 
-        private void TryEnqueueJson(string json)
+        private void TryEnqueueJson(string json, int connectionId)
         {
             try
             {
                 var msg = JsonUtility.FromJson<InboundMessage>(json);
                 if (!string.IsNullOrEmpty(msg.type))
                 {
+                    msg.connectionId = connectionId;
                     _inbox.Enqueue(msg);
                 }
             }

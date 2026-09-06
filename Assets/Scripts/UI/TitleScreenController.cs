@@ -33,6 +33,10 @@ namespace PocketBlaster.UI
     /// 2026-09-06:「起動画面で感度を上下されるボタンをスマホから狙って撃つことで
     /// 調整できるようにしてください」。BuildAdjustableSlider参照)。マウスでのドラッグも
     /// 引き続き使える。
+    ///
+    /// 4つ目の開始ボタンとしてマルチプレイヤー(2026-09-07、オーナー承認: 画面共有・
+    /// 移動オート・各自レティクル案)を追加した。難易度(カジュアル/アーケード)選択は
+    /// マルチプレイヤーには適用されない(常に共有体力あり、MultiplayerStageDirector参照)。
     /// </summary>
     public class TitleScreenController : MonoBehaviour
     {
@@ -44,6 +48,10 @@ namespace PocketBlaster.UI
         // だけの練習をするモードを実装してください」)。PracticeRangeSceneBuilder参照。
         [SerializeField] private string practiceSceneName = "PracticeRange";
         [SerializeField] private string practiceDisplayName = "練習（射撃レンジ）";
+        // マルチプレイヤーモード(2026-09-07、オーナー承認: 画面共有・移動オート・
+        // 各自レティクル案)。MultiplayerCoopSceneBuilder参照。
+        [SerializeField] private string multiplayerSceneName = "MultiplayerCoop";
+        [SerializeField] private string multiplayerDisplayName = "マルチプレイヤー（協力プレイ、2人まで）";
 
         private static readonly Color SelectedColor = new Color(0.30f, 0.45f, 0.95f);
         private static readonly Color UnselectedColor = new Color(0.2f, 0.2f, 0.26f);
@@ -282,8 +290,12 @@ namespace PocketBlaster.UI
             RegisterClickTarget(stage2Button, () => StartStage(stage2SceneName));
             panel.Add(stage2Button);
             var practiceButton = BuildStartButton(practiceDisplayName, () => StartStage(practiceSceneName));
+            practiceButton.style.marginBottom = 8;
             RegisterClickTarget(practiceButton, () => StartStage(practiceSceneName));
             panel.Add(practiceButton);
+            var multiplayerButton = BuildStartButton(multiplayerDisplayName, () => StartStage(multiplayerSceneName));
+            RegisterClickTarget(multiplayerButton, () => StartStage(multiplayerSceneName));
+            panel.Add(multiplayerButton);
 
             // スマホでの狙い操作用の状態表示とレティクル(root直下、パネルの外)。
             _phoneHintLabel = new Label();

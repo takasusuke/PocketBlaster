@@ -23,5 +23,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/PracticeRange.unity
     guid: 3bb336987ec1e3f42912e8a5bb2dbfdf
+  - enabled: 1
+    path: Assets/Scenes/MultiplayerCoop.unity
+    guid: 2f452b4a4eb89b0438ee4d433f93e84e
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

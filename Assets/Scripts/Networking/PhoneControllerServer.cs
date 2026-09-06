@@ -71,6 +71,39 @@ namespace PocketBlaster.Networking
         public event Action OnReturnToTitleRequested;
 
         /// <summary>
+        /// マルチプレイヤーモード用の追加API(2026-09-07、オーナー承認: 画面共有・
+        /// 移動オート・各自レティクル案)。シングルプレイヤー側の上記イベント・
+        /// プロパティは一切変更していない——どちらも同じ`PhoneOrientationServer`
+        /// インスタンスを見るが、こちらは接続ごと(`connectionId`)に区別する。
+        /// マルチプレイヤーでは「構える/構えない」の切り替えを使わない(移動が
+        /// 自動のため傾きは常にそのプレイヤーの照準でよい)ので、`aim_start`/
+        /// `aim_end`に相当する接続別イベントは用意していない。
+        /// </summary>
+        public event Action<int> OnPlayerConnected;
+        /// <summary>切断時。この時点でPlayersからは既に取り除かれている。</summary>
+        public event Action<int> OnPlayerDisconnected;
+        public event Action<int> OnPlayerReload;
+        public event Action<int> OnPlayerShoot;
+
+        private readonly Dictionary<int, PlayerConnection> _players = new Dictionary<int, PlayerConnection>();
+        public IReadOnlyDictionary<int, PlayerConnection> Players => _players;
+
+        /// <summary>接続1本ぶんの最新ジャイロ値だけを持つ小さいクラス
+        /// (マルチプレイヤー用、MultiplayerAimController参照)。</summary>
+        public sealed class PlayerConnection
+        {
+            public int Id { get; }
+            public float LatestAlpha { get; internal set; }
+            public float LatestBeta { get; internal set; }
+            public float LatestGamma { get; internal set; }
+
+            public PlayerConnection(int id) { Id = id; }
+        }
+
+        /// <summary>特定の接続へJSONを1件送る(マルチプレイヤーのプレイヤー色割り当て等)。</summary>
+        public void SendToPlayer(int playerId, string json) => _server?.SendText(playerId, json);
+
+        /// <summary>
         /// スマホ側の「構える」ボタンが構え状態の間true(オーナー要望、2026-09-06:
         /// 「『構える』ボタンを新たに配置して、構えている間は照準を動かして、構えて
         /// いない間は移動する」)。スマホの傾きは1系統しか無いため、狙い(照準)と
@@ -136,6 +169,21 @@ namespace PocketBlaster.Networking
 
             IsConnected = _server.IsClientConnected;
 
+            // マルチプレイヤー用: 接続/切断の通知をPlayersへ反映する。
+            while (_server.TryDequeueConnectionEvent(out var connectionEvent))
+            {
+                if (connectionEvent.connected)
+                {
+                    _players[connectionEvent.connectionId] = new PlayerConnection(connectionEvent.connectionId);
+                    OnPlayerConnected?.Invoke(connectionEvent.connectionId);
+                }
+                else
+                {
+                    _players.Remove(connectionEvent.connectionId);
+                    OnPlayerDisconnected?.Invoke(connectionEvent.connectionId);
+                }
+            }
+
             while (_server.TryDequeue(out var msg))
             {
                 switch (msg.type)
@@ -145,12 +193,22 @@ namespace PocketBlaster.Networking
                         LatestBeta = (float)msg.beta;
                         LatestGamma = (float)msg.gamma;
                         OnOrientation?.Invoke(LatestAlpha, LatestBeta, LatestGamma);
+                        // マルチプレイヤー用: 発信元の接続にも個別に反映する。切断直後の
+                        // 遅延メッセージ等でPlayersに無い場合は静かに無視する。
+                        if (_players.TryGetValue(msg.connectionId, out var player))
+                        {
+                            player.LatestAlpha = (float)msg.alpha;
+                            player.LatestBeta = (float)msg.beta;
+                            player.LatestGamma = (float)msg.gamma;
+                        }
                         break;
                     case "reload":
                         OnReload?.Invoke();
+                        OnPlayerReload?.Invoke(msg.connectionId);
                         break;
                     case "shoot":
                         OnShoot?.Invoke();
+                        OnPlayerShoot?.Invoke(msg.connectionId);
                         break;
                     case "step":
                         OnStep?.Invoke();

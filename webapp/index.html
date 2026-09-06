@@ -24,6 +24,11 @@
   }
   #status.connected { color: #7CFFB2; }
   #status.error { color: #FF8A8A; }
+  #playerBadge {
+    display: none;
+    font-size: 16px; font-weight: 700; padding: 10px 16px; border-radius: 12px;
+    width: 100%; max-width: 360px; box-sizing: border-box; color: white;
+  }
   button {
     font-size: 18px; padding: 16px 28px; border-radius: 14px; border: none;
     width: 100%; max-width: 360px; box-sizing: border-box;
@@ -59,6 +64,7 @@
 <div id="app">
   <h1>PocketBlaster コントローラー</h1>
   <div id="status">未接続</div>
+  <div id="playerBadge"></div>
   <details id="axisSettings" open>
     <summary>持ち方の設定（接続中でも変更可。変更後は「リロード」で基準をリセット）</summary>
     <div class="row">
@@ -106,6 +112,7 @@
   var pauseBtn = document.getElementById('pauseBtn');
   var retryBtn = document.getElementById('retryBtn');
   var titleBtn = document.getElementById('titleBtn');
+  var playerBadgeEl = document.getElementById('playerBadge');
   var rawEl = document.getElementById('raw');
   var stepCountEl = document.getElementById('stepCount');
   var verticalAxisSelect = document.getElementById('verticalAxisSelect');
@@ -189,11 +196,35 @@
       pauseBtn.disabled = true;
       retryBtn.disabled = true;
       titleBtn.disabled = true;
+      playerBadgeEl.style.display = 'none';
     };
     ws.onerror = function () {
       setStatus('接続エラー。PCと同じWi-Fiに接続しているか確認してください', 'error');
     };
+    // マルチプレイヤーモード(2026-09-07)からの通知を受け取る。それ以外のモードでは
+    // Unity側からメッセージが送られてこないため、これまで通り何も表示されない。
+    ws.onmessage = function (event) {
+      var data;
+      try { data = JSON.parse(event.data); } catch (e) { return; }
+
+      if (data.type === 'welcome') {
+        var label = PLAYER_COLOR_LABELS[data.color] || data.color;
+        var hex = PLAYER_COLOR_HEX[data.color] || '#4C6FFF';
+        playerBadgeEl.textContent = 'あなたは' + label + 'です';
+        playerBadgeEl.style.backgroundColor = hex;
+        playerBadgeEl.style.display = 'block';
+      } else if (data.type === 'full') {
+        playerBadgeEl.textContent = '満員です（他のプレイヤーが2人プレイ中）';
+        playerBadgeEl.style.backgroundColor = '#555';
+        playerBadgeEl.style.display = 'block';
+      }
+    };
   }
+
+  // マルチプレイヤーモードでのプレイヤー色表示用(PhoneControllerServer.
+  // SendToPlayerが送る"color"の値と対応させる)。
+  var PLAYER_COLOR_LABELS = { red: '赤色プレイヤー', blue: '青色プレイヤー' };
+  var PLAYER_COLOR_HEX = { red: '#E23B3B', blue: '#3B7DE2' };
 
   function sendOrientation(alpha, beta, gamma) {
     var now = Date.now();
