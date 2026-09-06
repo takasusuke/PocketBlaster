@@ -42,7 +42,7 @@ namespace PocketBlaster.Aim
     {
         [SerializeField] private float degreesToScreenPixels = 12f;
         [SerializeField] private int magazineSize = 6;
-        [SerializeField] private float autoReloadDelaySeconds = 0.6f;
+        [SerializeField] private float reloadDurationSeconds = 0.6f;
         [SerializeField] private Camera aimCamera;
         [SerializeField] private LayerMask hitLayerMask = ~0;
         [SerializeField] private float maxHitDistance = 1000f;
@@ -91,9 +91,14 @@ namespace PocketBlaster.Aim
         private Label _statusLabel;
         private Label _calibrationLabel;
         private Label _ammoLabel;
+        private VisualElement _reloadBarTrack;
+        private VisualElement _reloadBarFill;
+        private VisualElement _ammoPipsContainer;
+        private VisualElement[] _ammoPips;
 
         private bool _isCalibrated;
-        private bool _isAutoReloading;
+        private bool _isReloading;
+        private float _reloadElapsed;
         private float _refBeta;
         private float _refGamma;
         private float _offsetX;
@@ -103,6 +108,9 @@ namespace PocketBlaster.Aim
         private float _timeSinceReload;
         private float _emptyClickFlashTimer;
         private string _lastShotResult = "-";
+
+        private static readonly Color AmmoPipFilledColor = new Color(1f, 0.75f, 0.15f);
+        private static readonly Color AmmoPipEmptyColor = new Color(1f, 1f, 1f, 0.18f);
 
         private void Awake()
         {
@@ -154,6 +162,8 @@ namespace PocketBlaster.Aim
                 _reticle.style.display = DisplayStyle.None;
                 _statusLabel.style.display = DisplayStyle.None;
                 _ammoLabel.style.display = DisplayStyle.None;
+                _ammoPipsContainer.style.display = DisplayStyle.None;
+                _reloadBarTrack.style.display = DisplayStyle.None;
                 return;
             }
 
@@ -161,6 +171,7 @@ namespace PocketBlaster.Aim
             _reticle.style.display = DisplayStyle.Flex;
             _statusLabel.style.display = DisplayStyle.Flex;
             _ammoLabel.style.display = DisplayStyle.Flex;
+            _ammoPipsContainer.style.display = DisplayStyle.Flex;
 
             _timeSinceReload += Time.deltaTime;
             if (_emptyClickFlashTimer > 0f) _emptyClickFlashTimer -= Time.deltaTime;
@@ -195,12 +206,30 @@ namespace PocketBlaster.Aim
             _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
             _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
 
+            // リロードアニメーション(オーナー要望、2026-09-06:「リロードアニメーションを
+            // 実装して」)。レティクルの真下に進捗バーを追従表示する — レティクル自体は
+            // 円形で回転させても見た目が変わらないため、別要素の進捗バーで表現する。
+            if (_isReloading)
+            {
+                const float barWidth = 56f;
+                const float barHeight = 6f;
+                _reloadBarTrack.style.display = DisplayStyle.Flex;
+                _reloadBarTrack.style.left = x - barWidth / 2f;
+                _reloadBarTrack.style.top = y + _reticle.resolvedStyle.height / 2f + 6f;
+                var progress = Mathf.Clamp01(_reloadElapsed / reloadDurationSeconds);
+                _reloadBarFill.style.width = Length.Percent(progress * 100f);
+            }
+            else
+            {
+                _reloadBarTrack.style.display = DisplayStyle.None;
+            }
+
             if (IsMouseDebugActive && Input.GetMouseButtonDown(0))
             {
                 HandleShoot();
             }
 
-            var ammoLine = _isAutoReloading
+            var ammoLine = _isReloading
                 ? "リロード中..."
                 : _ammo.CurrentAmmo > 0
                     ? $"弾: {_ammo.CurrentAmmo}/{_ammo.MagazineSize}"
@@ -213,12 +242,18 @@ namespace PocketBlaster.Aim
             // オーナーからのプレイテストFB(2026-09-06)「残り弾数をゲーム画面に表示して」を
             // 受けて、上のammoLine(詳細デバッグ表示の一部)とは別に、見つけやすい大きな
             // 専用表示を画面右下に出す。
-            _ammoLabel.text = _isAutoReloading
+            _ammoLabel.text = _isReloading
                 ? "リロード中..."
                 : $"残弾 {_ammo.CurrentAmmo} / {_ammo.MagazineSize}";
-            _ammoLabel.style.color = (_ammo.CurrentAmmo == 0 && !_isAutoReloading)
+            _ammoLabel.style.color = (_ammo.CurrentAmmo == 0 && !_isReloading)
                 ? new Color(1f, 0.35f, 0.35f)
                 : Color.white;
+
+            for (var i = 0; i < _ammoPips.Length; i++)
+            {
+                var isLoaded = !_isReloading && i < _ammo.CurrentAmmo;
+                _ammoPips[i].style.backgroundColor = isLoaded ? AmmoPipFilledColor : AmmoPipEmptyColor;
+            }
 
             _statusLabel.text =
                 $"接続: {(_server.IsConnected ? "済" : "未接続")}  port {_server.Port}\n" +
@@ -233,7 +268,7 @@ namespace PocketBlaster.Aim
         private void HandleShoot()
         {
             if (!_isCalibrated) return; // キャリブレーション完了前は撃てない
-            if (_isAutoReloading) return; // 自動リロード中(のちのちここにリロードアニメーションが入る)
+            if (_isReloading) return; // リロードアニメーション中は撃てない
 
             if (!_ammo.Shoot())
             {
@@ -250,26 +285,38 @@ namespace PocketBlaster.Aim
 
             if (_ammo.CurrentAmmo == 0)
             {
-                StartCoroutine(AutoReloadRoutine());
+                // 残弾0での自動リロード(オーナー要望、2026-09-06)。狙いの基準の取り直し
+                // (Recenter)は行わない — 弾切れになった瞬間にどこを狙っているかは不定なので、
+                // それを新しい基準にするとドリフト補正どころか逆にずれの原因になる
+                // (../CLAUDE.md 設計上の不変条件2)。
+                BeginReload(recenterOnComplete: false);
             }
         }
 
         /// <summary>
-        /// 残弾0で自動的にリロードする(オーナー要望、2026-09-06)。手動リロード
-        /// (HandleReload、"reload"メッセージ・フリックジェスチャー)とは異なり
-        /// <see cref="Recenter"/>は呼ばない — 弾切れになった瞬間にどこを狙っているかは
-        /// 不定なので、それを新しい基準にするとドリフト補正どころか逆にずれの原因になる。
-        /// 狙いの基準を取り直すのは、引き続き「画面中央に構え直してリロード操作をする」
-        /// 明示的な行動だけに限定する(../CLAUDE.md 設計上の不変条件2)。
-        /// autoReloadDelaySecondsは今は単なる待ち時間だが、後で差し替える
-        /// リロードアニメーションの尺として使う想定の置き場所。
+        /// リロードアニメーションを開始する(オーナー要望、2026-09-06:「リロード
+        /// アニメーションを実装して」)。手動リロード("reload"メッセージ・フリック
+        /// ジェスチャー)・残弾0での自動リロードのどちらもこれを通る。既に進行中なら
+        /// 何もしない(二重開始防止)。
         /// </summary>
-        private IEnumerator AutoReloadRoutine()
+        private void BeginReload(bool recenterOnComplete)
         {
-            _isAutoReloading = true;
-            yield return new WaitForSeconds(autoReloadDelaySeconds);
+            if (_isReloading) return;
+            StartCoroutine(ReloadRoutine(recenterOnComplete));
+        }
+
+        private IEnumerator ReloadRoutine(bool recenterOnComplete)
+        {
+            _isReloading = true;
+            _reloadElapsed = 0f;
+            while (_reloadElapsed < reloadDurationSeconds)
+            {
+                _reloadElapsed += Time.deltaTime;
+                yield return null;
+            }
             _ammo.Reload();
-            _isAutoReloading = false;
+            if (recenterOnComplete) Recenter();
+            _isReloading = false;
         }
 
         /// <summary>
@@ -317,8 +364,10 @@ namespace PocketBlaster.Aim
 
         private void HandleReload()
         {
-            _ammo.Reload();
-            Recenter();
+            // 手動リロード("reload"メッセージ・フリックジェスチャー)は、再キャリブレーション
+            // (Recenter)を伴う — プレイヤーが実際に画面中央へ構え直した上での操作なので、
+            // 自動リロードと違い基準を取り直しても安全(../CLAUDE.md 設計上の不変条件2)。
+            BeginReload(recenterOnComplete: true);
         }
 
         public void Recenter()
@@ -381,6 +430,34 @@ namespace PocketBlaster.Aim
             _reticle.style.borderBottomColor = reticleColor;
             root.Add(_reticle);
 
+            // リロード進捗バー(オーナー要望、2026-09-06:「リロードアニメーションを実装して」)。
+            // レティクルは円形で回転させても見た目が変わらないため、レティクルの真下に
+            // 追従する小さな進捗バーで表現する。既定は非表示、Update()でリロード中だけ表示する。
+            _reloadBarTrack = new VisualElement();
+            _reloadBarTrack.style.display = DisplayStyle.None;
+            _reloadBarTrack.style.position = Position.Absolute;
+            _reloadBarTrack.style.width = 56;
+            _reloadBarTrack.style.height = 6;
+            _reloadBarTrack.style.backgroundColor = new Color(0f, 0f, 0f, 0.5f);
+            _reloadBarTrack.style.borderTopLeftRadius = 3;
+            _reloadBarTrack.style.borderTopRightRadius = 3;
+            _reloadBarTrack.style.borderBottomLeftRadius = 3;
+            _reloadBarTrack.style.borderBottomRightRadius = 3;
+            root.Add(_reloadBarTrack);
+
+            _reloadBarFill = new VisualElement();
+            _reloadBarFill.style.position = Position.Absolute;
+            _reloadBarFill.style.left = 0;
+            _reloadBarFill.style.top = 0;
+            _reloadBarFill.style.bottom = 0;
+            _reloadBarFill.style.width = Length.Percent(0);
+            _reloadBarFill.style.backgroundColor = new Color(1f, 0.75f, 0.15f);
+            _reloadBarFill.style.borderTopLeftRadius = 3;
+            _reloadBarFill.style.borderTopRightRadius = 3;
+            _reloadBarFill.style.borderBottomLeftRadius = 3;
+            _reloadBarFill.style.borderBottomRightRadius = 3;
+            _reloadBarTrack.Add(_reloadBarFill);
+
             _statusLabel = new Label();
             _statusLabel.style.position = Position.Absolute;
             _statusLabel.style.left = 12;
@@ -413,6 +490,33 @@ namespace PocketBlaster.Aim
             _ammoLabel.style.borderBottomRightRadius = 12;
             RuntimeLabelStyle.ApplyDefaultFont(_ammoLabel);
             root.Add(_ammoLabel);
+
+            // 残弾を数字だけでなく一目でわかるアイコン(弾のピップ)でも示す
+            // (オーナー要望、2026-09-06:「弾の残り弾数は、数字だけでなくアイコンでも
+            // 分かりやすくなるようにして」)。残弾表示のすぐ上に、装填数ぶんの小さな
+            // 四角を並べ、残っている分だけ明るい色にする。
+            _ammoPipsContainer = new VisualElement();
+            _ammoPipsContainer.style.position = Position.Absolute;
+            _ammoPipsContainer.style.bottom = 88;
+            _ammoPipsContainer.style.right = 24;
+            _ammoPipsContainer.style.flexDirection = FlexDirection.Row;
+            root.Add(_ammoPipsContainer);
+
+            _ammoPips = new VisualElement[Mathf.Max(magazineSize, 1)];
+            for (var i = 0; i < _ammoPips.Length; i++)
+            {
+                var pip = new VisualElement();
+                pip.style.width = 16;
+                pip.style.height = 22;
+                pip.style.marginLeft = 4;
+                pip.style.borderTopLeftRadius = 3;
+                pip.style.borderTopRightRadius = 3;
+                pip.style.borderBottomLeftRadius = 3;
+                pip.style.borderBottomRightRadius = 3;
+                pip.style.backgroundColor = AmmoPipFilledColor;
+                _ammoPipsContainer.Add(pip);
+                _ammoPips[i] = pip;
+            }
         }
     }
 }
