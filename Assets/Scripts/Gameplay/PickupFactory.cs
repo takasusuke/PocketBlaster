@@ -5,9 +5,16 @@ namespace PocketBlaster.Gameplay
     /// <summary>
     /// アイテム(Pickup)を実行時に生成するヘルパー。EnemyFactory(Editorのみ、シーン構築時)
     /// と違い、ウェーブ開始のたびにランダムな位置へ生成する必要があるためランタイム
-    /// コードにしてある(StageDirector参照)。専用アートはまだ無いので、種類ごとに
-    /// 色分けした円形スプライトを手続き的に生成する(../CLAUDE.md 11「初期実装では
-    /// 画像を作らない」と同じ考え方)。
+    /// コードにしてある(StageDirector参照)。
+    ///
+    /// 体力回復(Health)・弾薬回復(Reload)は専用アートを用意した(オーナー要望2026-09-06:
+    /// 「弾薬回復や体力回復の間にも画像を適用して」)。`Assets/Resources/Pickups/`配下に
+    /// 置き、`Resources.Load`で読み込む — EnemyFactoryと違いランタイムコード(UnityEditor
+    /// 非依存)からアセットパスで読み込む必要があるため、`Resources`フォルダの規約を使う。
+    /// 見つからない場合(まだ生成中、またはAmmoUpのようにまだ専用アートが無い種類)は
+    /// 手続き生成した色分け円形スプライトへ自動的にフォールバックする
+    /// (../CLAUDE.md 11「初期実装では画像を作らない」と同じ考え方——アートが無くても
+    /// 動作は止めない)。
     /// </summary>
     public static class PickupFactory
     {
@@ -19,7 +26,9 @@ namespace PocketBlaster.Gameplay
             root.transform.position = position;
             root.AddComponent<Billboard>();
 
-            var sprite = GetCircleSprite();
+            var resourcePath = ArtResourcePath(type);
+            var artSprite = resourcePath != null ? Resources.Load<Sprite>(resourcePath) : null;
+            var sprite = artSprite != null ? artSprite : GetCircleSprite();
             var collider = root.AddComponent<BoxCollider>();
             collider.size = new Vector3(scale, scale, 0.3f);
 
@@ -28,11 +37,25 @@ namespace PocketBlaster.Gameplay
             visualGo.transform.localScale = Vector3.one * scale;
             var spriteRenderer = visualGo.AddComponent<SpriteRenderer>();
             spriteRenderer.sprite = sprite;
-            spriteRenderer.color = TypeColor(type);
+            // 専用アートは絵そのものが種類を伝えるので色は付けない。フォールバックの
+            // 円だけ、種類が見た目で区別できるよう色分けする。
+            if (artSprite == null) spriteRenderer.color = TypeColor(type);
 
             var pickup = root.AddComponent<Pickup>();
             pickup.Initialize(type);
             return pickup;
+        }
+
+        /// <summary>`Resources.Load`に渡すパス(拡張子・"Resources/"接頭辞なし)。
+        /// 専用アートが無い種類はnullを返し、呼び出し側で円にフォールバックさせる。</summary>
+        private static string ArtResourcePath(PickupType type)
+        {
+            switch (type)
+            {
+                case PickupType.Health: return "Pickups/health_pickup";
+                case PickupType.Reload: return "Pickups/ammo_reload_pickup";
+                default: return null;
+            }
         }
 
         private static Color TypeColor(PickupType type)

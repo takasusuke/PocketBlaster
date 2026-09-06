@@ -12,12 +12,11 @@ namespace PocketBlaster.Gameplay
     /// <summary>
     /// 難易度モード(docs/requirements.md §8 将来の拡張)。フェールの条件は
     /// 「敵に近づかれ過ぎた」(StageDirector.OnEnemyReachedPlayer、EnemyApproach参照、
-    /// 2026-09-06追加)のみ。アーケードモードでのみ残機を減らす。
-    ///
-    /// 「狙って撃ってはずした」も残機を減らす条件だったが、実際に遊んでみて厳しすぎる
-    /// という判断からオーナーが却下した(2026-09-06:「難易度モード「はずれ＝残機減少」は
-    /// 却下です」)。`GyroReticleController.OnShotResolved`イベント自体は残しているが、
-    /// このクラスではもう購読しない。
+    /// 2026-09-06追加)と「高すぎる場所からの落下」のみで、いずれも**アーケードモードでのみ
+    /// ゲームオーバーに繋がる**。「狙って撃ってはずした」も残機を減らす条件だったが、
+    /// 実際に遊んでみて厳しすぎるという判断からオーナーが却下した(2026-09-06:「難易度
+    /// モード「はずれ＝残機減少」は却下です」)。`GyroReticleController.OnShotResolved`
+    /// イベント自体は残しているが、このクラスではもう購読しない。
     ///
     /// モードは起動画面(Title、TitleScreenController)で選び、GameSettings(PlayerPrefs)
     /// 経由でシーンをまたいで受け渡される(2026-09-06、以前はスマホ側の接続直後の
@@ -33,6 +32,11 @@ namespace PocketBlaster.Gameplay
     /// (オーナー要望2026-09-06:「プレイヤーの体力ゲージもUIとして実装してください」)。
     /// ダメージ量は発生源によって変える — 敵接触は大きめ、落下は高さに応じて可変
     /// (PlayerLocomotion.OnFallDamage、FallDamageCalculator参照)。
+    ///
+    /// HPゲージ自体はモードに関わらず常時表示する(オーナー要望2026-09-06:「体力バーは
+    /// モードに限らず表示して」)。カジュアルモードでもダメージ・回復は同じようにHPへ
+    /// 反映するが、「無制限」の名の通りHPが尽きてもゲームオーバーにはしない
+    /// (0で床止まりのまま、フェール判定はアーケードモードだけが行う)。
     /// </summary>
     public class GameSession : MonoBehaviour
     {
@@ -76,7 +80,7 @@ namespace PocketBlaster.Gameplay
             if (playerLocomotion == null) playerLocomotion = GetComponent<PlayerLocomotion>();
 
             _mode = GameSettings.Current.IsArcadeMode ? Mode.Arcade : Mode.Casual;
-            _health = _mode == Mode.Arcade ? new PlayerHealthState(maxHealth) : null;
+            _health = new PlayerHealthState(maxHealth);
 
             _server.OnPauseToggleRequested += HandlePauseToggleRequested;
             _server.OnRetryRequested += HandleRetryRequested;
@@ -129,7 +133,7 @@ namespace PocketBlaster.Gameplay
 
         private void HandleEnemyReachedPlayer()
         {
-            TakeDamageIfArcade(enemyContactDamage, "敵の接近");
+            TakeDamage(enemyContactDamage, "敵の接近");
         }
 
         /// <summary>
@@ -139,28 +143,34 @@ namespace PocketBlaster.Gameplay
         /// </summary>
         private void HandleFallDamage(int amount)
         {
-            TakeDamageIfArcade(amount, "落下");
+            TakeDamage(amount, "落下");
         }
 
         /// <summary>
-        /// 体力回復アイテム(オーナー要望、2026-09-06)。カジュアルモードには体力の
-        /// 概念が無いので何もしない(StageDirector側でもカジュアルモードでは
-        /// このアイテム自体を出現候補から除外している)。
+        /// 体力回復アイテム(オーナー要望、2026-09-06)。カジュアルモードでも見た目上は
+        /// 回復するが、そもそもStageDirector側でカジュアルモードではこのアイテム自体を
+        /// 出現候補から除外しているため、実際に呼ばれるのはアーケードモードだけになる。
         /// </summary>
         private void HandleHealthPickupCollected()
         {
-            if (_mode != Mode.Arcade || _isGameOver) return;
+            if (_isGameOver) return;
             _health.Heal(healthPickupHealAmount);
             UpdateLabel();
         }
 
-        private void TakeDamageIfArcade(int amount, string reason)
+        /// <summary>
+        /// HPへの反映自体はモードに関わらず行う(体力バーを常時表示する以上、
+        /// カジュアルモードでも見た目に反応が無いと不自然なため)。ゲームオーバーに
+        /// なるのはアーケードモードだけ — 「無制限」のカジュアルモードはHPが尽きても
+        /// 0で床止まりするだけで続行する。
+        /// </summary>
+        private void TakeDamage(int amount, string reason)
         {
-            if (_mode != Mode.Arcade || _isGameOver) return;
+            if (_isGameOver) return;
 
             var isGameOverNow = _health.TakeDamage(amount);
             TriggerDamageFlash();
-            if (isGameOverNow)
+            if (isGameOverNow && _mode == Mode.Arcade)
             {
                 _isGameOver = true;
                 _gameOverReason = reason;
@@ -196,18 +206,13 @@ namespace PocketBlaster.Gameplay
 
         private void UpdateLabel()
         {
-            if (_mode == Mode.Casual)
-            {
-                _sessionLabel.text = "モード: カジュアル（無制限）";
-                _healthBarTrack.style.display = DisplayStyle.None;
-                return;
-            }
-
+            var modeText = _mode == Mode.Casual ? "モード: カジュアル（無制限）" : "モード: アーケード";
             _sessionLabel.text = _isGameOver
                 ? $"ゲームオーバー（{_gameOverReason}でHPが尽きました）"
-                : $"モード: アーケード  HP: {_health.CurrentHealth}/{_health.MaxHealth}";
+                : $"{modeText}  HP: {_health.CurrentHealth}/{_health.MaxHealth}";
 
-            _healthBarTrack.style.display = DisplayStyle.Flex;
+            // 体力バーはモードに関わらず常時表示する(オーナー要望2026-09-06:
+            // 「体力バーはモードに限らず表示して」)。
             var ratio = Mathf.Clamp01(_health.CurrentHealth / (float)_health.MaxHealth);
             _healthBarFill.style.width = Length.Percent(ratio * 100f);
         }
@@ -234,7 +239,7 @@ namespace PocketBlaster.Gameplay
             _uiDocument.rootVisualElement.Add(_sessionLabel);
 
             // 体力ゲージ(オーナー要望2026-09-06)。GyroReticleControllerのリロードバーと
-            // 同じtrack+fillの構成。アーケードモードのみ表示(UpdateLabel参照)。
+            // 同じtrack+fillの構成。モードに関わらず常時表示する(UpdateLabel参照)。
             _healthBarTrack = new VisualElement();
             _healthBarTrack.style.position = Position.Absolute;
             _healthBarTrack.style.left = 12;

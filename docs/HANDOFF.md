@@ -17,6 +17,23 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 体力バーの常時表示・Pickup専用アート（2026-09-06）
+
+- **体力バーをモードに関わらず常時表示（オーナー要望「体力バーはモードに限らず
+  表示して」）**: `GameSession`が`PlayerHealthState`をカジュアルモードでも生成し、
+  ダメージ・回復を同じようにHPへ反映するようにした。ただし「無制限」の意味は保つため、
+  ゲームオーバーになるのはアーケードモードだけ（カジュアルはHPが0で床止まりして続行）。
+- **Pickupに専用アート（オーナー要望「弾薬回復や体力回復の間にも画像を適用して」）**:
+  体力回復(Health)・弾薬回復(Reload)の2種類にローカル画像生成でアートを追加
+  (`Assets/Resources/Pickups/health_pickup.png`・`ammo_reload_pickup.png`、
+  `~/AIFiles/assets/PocketBlaster/Pickups/`にも複製済み)。`PickupFactory`は
+  ランタイムコードでUnityEditor APIが使えないため、`EnemyFactory`のような
+  Editor実行時のimport設定矯正が使えない——代わりに`PickupArtImporter`(新規Editor、
+  `-executeMethod`で一度だけ実行)でSprite化した。AmmoUp(最大弾薬数増加)は
+  専用アートを用意していないため、引き続き手続き生成の色分け円のまま。
+- **確認方法**: EditMode 62件全て通過。Play Modeでの見た目確認はまだ行っていない
+  （**未検証**: 体力バーの見た目・Pickupアートの実際のサイズ感）。
+
 **効かなかった方法（2026-09-06、どちらも実機で確認して却下）**:
 1. バッチモードで`EditorSceneManager.OpenScene()`してから`-quit`
    （`SceneLauncher.cs`として実装したが削除済み）→ 次回GUI起動時の
