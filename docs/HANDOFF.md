@@ -2,24 +2,30 @@
 
 セッションを立て直したら、まずここを読む。詳細は[`requirements.md`](requirements.md)。
 
-**Unity EditorのGUIを起動する時は、開くべきシーンのファイルパスを起動引数に直接渡す**
-（オーナー要望、2026-09-06: 「Unityで開くべきシーンは、デフォルトシーンに随時設定する
-ようにして」）。
+**Unity EditorのGUIを起動する時、開くべきシーンは`PendingSceneOpener`
+(`Assets/Editor/PendingSceneOpener.cs`)経由で指定する**（オーナー要望、2026-09-06:
+「Unityで開くべきシーンは、デフォルトシーンに随時設定するようにして」）。
+プロジェクト直下にマーカーファイル`.pending-scene-to-open.txt`（`.gitignore`済み）を
+書いてから起動すると、Editor自身が`[InitializeOnLoad]`で起動時にそれを読んで
+該当シーンを開き、マーカーは消費される。
 
 ```powershell
-Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @(
-  '-projectPath', '<projectPath>',
-  '<projectPath>\Assets\Scenes\<シーン名>.unity'
-)
+Set-Content -Path "<projectPath>\.pending-scene-to-open.txt" -Value "Assets/Scenes/<シーン名>.unity" -Encoding utf8 -NoNewline
+Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '<projectPath>')
 ```
 
-**バッチモードでシーンを開いて`-quit`する方式(`SceneLauncher.cs`として一度実装した)は
-効かないことを確認済み(2026-09-06、削除済み)** — Unity Editorが次回GUI起動時に復元する
-「最後に開いていたシーン」はウィンドウレイアウトの一部としてGUIセッションでしか
-保存されないらしく、バッチモードでの`EditorSceneManager.OpenScene`→`-quit`では
-反映されなかった(実際に「Untitled Scene」が開いてしまうことを確認)。
-**GUI起動時の引数指定が正しい方法。** Editor.logの`Loaded scene '...'`で
-実際にどのシーンが開いたかを確認できる。
+Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
+実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
+
+**効かなかった方法（2026-09-06、どちらも実機で確認して却下）**:
+1. バッチモードで`EditorSceneManager.OpenScene()`してから`-quit`
+   （`SceneLauncher.cs`として実装したが削除済み）→ 次回GUI起動時の
+   「最後に開いていたシーン」に反映されない（ウィンドウレイアウトの一部として
+   GUIセッションでしか保存されない模様）。
+2. GUI起動コマンドの引数にシーンファイルパスを直接渡す（`Unity.exe -projectPath <p>
+   <シーンのフルパス>`）→ これも反映されず、Untitled Sceneが開いた。
+   （「ダブルクリックでシーンが開く」という一般的な理解は、少なくともこの起動経路
+   （`Start-Process`での直接起動）には当てはまらなかった）
 
 ## 現状（2026-09-06）
 

@@ -26,6 +26,10 @@
 /tools/gen-dev-cert/bin/
 /tools/gen-dev-cert/obj/
 
+# Marker file for PendingSceneOpener (Assets/Editor/PendingSceneOpener.cs) — a
+# session-local instruction, not project state, so it never gets committed.
+/.pending-scene-to-open.txt
+
 # OS
 .DS_Store
 Thumbs.db
