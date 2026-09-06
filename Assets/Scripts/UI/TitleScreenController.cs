@@ -182,6 +182,18 @@ namespace PocketBlaster.UI
             root.style.justifyContent = Justify.Center;
             root.style.flexGrow = 1;
 
+            // 背景の一枚絵(オーナー要望、2026-09-06:「起動画面の背景に使える一枚絵を
+            // 作成して適用して」)。ランタイムコード(UnityEditor非依存)なので
+            // Resources.Loadで読み込む(Pickupの専用アートと同じ理由、PickupFactory
+            // 参照)。見つからない場合はTitleSceneBuilderが設定したカメラの単色背景の
+            // ままになる——生成待ちでも画面自体は問題なく動く。
+            var backgroundTexture = Resources.Load<Texture2D>("UI/title_background");
+            if (backgroundTexture != null)
+            {
+                root.style.backgroundImage = new StyleBackground(backgroundTexture);
+                root.style.unityBackgroundScaleMode = new StyleEnum<ScaleMode>(ScaleMode.ScaleAndCrop);
+            }
+
             var panel = new VisualElement();
             panel.style.width = 460;
             panel.style.backgroundColor = new Color(0f, 0f, 0f, 0.55f);

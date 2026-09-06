@@ -14,7 +14,9 @@ namespace PocketBlaster.Networking
     /// を開くと、このスクリプトがページを配信し、続けて開かれるWebSocket接続から
     /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")・
     /// 足踏み検知("step"、PlayerLocomotion参照)・
-    /// 一時停止("pause")・再挑戦("retry"、いずれもGameSession参照)・
+    /// 一時停止("pause")・再挑戦("retry")・起動画面へ戻る("title"、
+    /// オーナー要望2026-09-06:「練習モードから起動画面に戻るボタンをスマホに配置して」。
+    /// いずれもGameSession参照)・
     /// 構えの開始/終了("aim_start"/"aim_end"、IsAiming参照)を受け取る。
     /// 難易度モードは2026-09-06に起動画面(Title)側へ移したため、ここでは扱わない
     /// (GameSettings/GameSession参照)。
@@ -60,14 +62,27 @@ namespace PocketBlaster.Networking
         public event Action OnStep;
         public event Action OnPauseToggleRequested;
         public event Action OnRetryRequested;
+        /// <summary>
+        /// 起動画面(Title)へ戻る要求(オーナー要望、2026-09-06:「練習モードから起動画面に
+        /// 戻るボタンをスマホに配置して」)。練習モードに限らず、どのシーンでも
+        /// GameSessionが購読して即座にシーン遷移する(ステージクリア/ゲームオーバー後の
+        /// 自動遷移とは別の、プレイヤーが任意のタイミングで戻れる手動操作)。
+        /// </summary>
+        public event Action OnReturnToTitleRequested;
 
         /// <summary>
-        /// スマホ側の「構える」ボタンを押している間だけtrue(オーナー要望、2026-09-06:
+        /// スマホ側の「構える」ボタンが構え状態の間true(オーナー要望、2026-09-06:
         /// 「『構える』ボタンを新たに配置して、構えている間は照準を動かして、構えて
         /// いない間は移動する」)。スマホの傾きは1系統しか無いため、狙い(照準)と
         /// 移動(歩き回り)のどちらに使うかをこのボタンで明示的に切り替える設計にした。
         /// GyroReticleControllerが照準の有効/無効に、PlayerLocomotionが移動方向の
         /// 入力切り替えに、それぞれこれを見る。
+        ///
+        /// 当初は「押している間だけ構える」長押し方式だったが、オーナー要望(2026-09-06:
+        /// 「構える、構えないは長押しではなくボタンによる切り替え式にして」)によりタップ
+        /// 切り替え式に変更した。ここでの見え方は変わらない——"aim_start"/"aim_end"を
+        /// 受け取ってtrue/falseにするだけのレベル値で、webapp側の送信タイミングが
+        /// 「押している間」から「押した瞬間ごとの切り替え」に変わっただけ。
         /// </summary>
         public bool IsAiming { get; private set; }
 
@@ -145,6 +160,9 @@ namespace PocketBlaster.Networking
                         break;
                     case "retry":
                         OnRetryRequested?.Invoke();
+                        break;
+                    case "title":
+                        OnReturnToTitleRequested?.Invoke();
                         break;
                     case "aim_start":
                         IsAiming = true;

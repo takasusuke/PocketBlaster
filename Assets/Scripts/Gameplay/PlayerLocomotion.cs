@@ -65,6 +65,11 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private float stepUpHeight = 0.6f;
         [SerializeField] private float fallDamageSafeHeight = 1.5f;
         [SerializeField] private float fallDamagePerMeter = 20f;
+        // 構えていない間の上下(見上げ/見下ろし)は、左右旋回よりも少し感度を落とす
+        // (オーナー要望2026-09-06:「構えていない状態の上下方向の感度は少し低くして
+        // ください」)。左右(lookYaw)には掛けない——上下だけ「効きすぎる」という
+        // 指摘だったため。
+        [SerializeField] private float lookPitchSensitivityMultiplier = 0.7f;
 
         /// <summary>落下ダメージが発生した瞬間に1回だけ呼ばれる。引数はダメージ量。</summary>
         public event System.Action<int> OnFallDamage;
@@ -90,11 +95,28 @@ namespace PocketBlaster.Gameplay
             _offsetState = new PlayerOffsetState(maxOffsetRadius);
             _obstacles = FindObjectsByType<Obstacle>(FindObjectsSortMode.None);
             _server.OnStep += HandleStep;
+            if (aimSource != null) aimSource.OnReloadCompleted += HandleReloadCompleted;
         }
 
         private void OnDestroy()
         {
             if (_server != null) _server.OnStep -= HandleStep;
+            if (aimSource != null) aimSource.OnReloadCompleted -= HandleReloadCompleted;
+        }
+
+        /// <summary>
+        /// リロード完了時、構えていない間だけ視界の上下(pitch)を初期状態(水平)へ戻す
+        /// (オーナー要望2026-09-06:「構えていない状態でリロード完了すると、上下方向の
+        /// 視点は初期状態に戻るようにして」)。左右(yaw、向いている方向)は意図した
+        /// 操作の結果なのでそのまま維持する。基準角度(_lookRefBeta)も今の傾きへ
+        /// 取り直しておく——そうしないと次のフレームで古い基準との差分が
+        /// そのままpitchへ乗り、戻した直後にまたずれてしまう。
+        /// </summary>
+        private void HandleReloadCompleted()
+        {
+            if (_server.IsAiming) return;
+            _lookPitch = 0f;
+            _lookRefBeta = _server.LatestBeta;
         }
 
         private void Update()
@@ -125,7 +147,9 @@ namespace PocketBlaster.Gameplay
             // 間のUnity側マッピングだけがずれていた)。
             var lookSensitivity = GameSettings.Current.LookSensitivity;
             _lookYaw += yawInput * lookSensitivity * Time.deltaTime;
-            _lookPitch = Mathf.Clamp(_lookPitch + pitchInput * lookSensitivity * Time.deltaTime, -maxLookPitchDegrees, maxLookPitchDegrees);
+            _lookPitch = Mathf.Clamp(
+                _lookPitch + pitchInput * lookSensitivity * lookPitchSensitivityMultiplier * Time.deltaTime,
+                -maxLookPitchDegrees, maxLookPitchDegrees);
             movableRoot.localRotation = Quaternion.Euler(_lookPitch, _lookYaw, 0f);
         }
 

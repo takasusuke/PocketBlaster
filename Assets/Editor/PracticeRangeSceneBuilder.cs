@@ -14,6 +14,11 @@ namespace PocketBlaster.EditorTools
     /// 持たない — 自由に歩き回りながら、動かない的(Target、respawns:true・
     /// approaches:false)を好きなだけ撃って練習できるだけのシーン。的は倒れても
     /// 自動で復帰する(TargetHitState、Milestone3と同じ仕組み)ので回数制限が無い。
+    /// 障害物・パルクール構造物も他ステージと同じ`FieldObstacleScatterer`で配置し
+    /// (オーナー要望、2026-09-06:「練習モードにオブジェクトを配置して」)、移動・
+    /// パルクールの練習も兼ねられるようにした。ステージクリアが無く自動では終わらない
+    /// ため、スマホの「タイトルへ戻る」ボタン(PhoneControllerServer.
+    /// OnReturnToTitleRequested)が抜ける手段になる。
     /// Titleシーンから3つ目の開始ボタンとして選べる(TitleScreenController参照)。
     /// `Unity.exe -batchmode -quit -executeMethod PocketBlaster.EditorTools.PracticeRangeSceneBuilder.Build`
     /// で実行する。
@@ -72,6 +77,12 @@ namespace PocketBlaster.EditorTools
             {
                 EnemyFactory.CreateVegetableZombie(t.Name, t.Position, t.Kind, t.Sprite, t.Juice, scale: 1.2f, respawns: true, approaches: false);
             }
+
+            // 障害物・パルクール構造物(オーナー要望、2026-09-06:「練習モードに
+            // オブジェクトを配置して」)。他のステージと同じくFieldObstacleScatterer
+            // (Editor)で用意する——移動・パルクールの練習も同じ場所でできるようにする。
+            FieldObstacleScatterer.BuildParkourStaircase("Parkour", new Vector3(-6f, 0f, 8f), Vector3.right);
+            FieldObstacleScatterer.Scatter("FieldObstacle", seed: 4003, innerRadius: 40f, outerRadius: 170f, count: 40);
 
             var rigGo = new GameObject("GyroAimTestRig");
             // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。

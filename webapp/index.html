@@ -41,8 +41,8 @@
   #reloadBtn { background: #FF7A45; color: white; font-size: 24px; font-weight: 600; padding: 26px; max-width: 420px; }
   #reloadBtn:disabled { background: #333; color: #888; }
   #subControls { display: flex; gap: 12px; width: 100%; max-width: 360px; }
-  #pauseBtn, #retryBtn { background: #2A2A38; color: #ddd; font-size: 15px; padding: 12px; }
-  #pauseBtn:disabled, #retryBtn:disabled { background: #222; color: #666; }
+  #pauseBtn, #retryBtn, #titleBtn { background: #2A2A38; color: #ddd; font-size: 15px; padding: 12px; }
+  #pauseBtn:disabled, #retryBtn:disabled, #titleBtn:disabled { background: #222; color: #666; }
   #raw { font-size: 12px; color: #888; }
   #stepStatus { font-size: 13px; color: #aaa; }
   #axisSettings {
@@ -85,12 +85,13 @@
     </div>
   </details>
   <button id="connectBtn">接続する</button>
-  <button id="aimBtn" disabled>構える（押している間だけ狙える）</button>
+  <button id="aimBtn" disabled>構える（タップで切り替え）</button>
   <button id="shootBtn" disabled>撃つ</button>
   <button id="reloadBtn" disabled>リロード（弾を補充し、狙いを基準位置にリセット）</button>
   <div id="subControls">
     <button id="pauseBtn" disabled>一時停止</button>
     <button id="retryBtn" disabled>再挑戦</button>
+    <button id="titleBtn" disabled>タイトルへ戻る</button>
   </div>
   <div id="raw"></div>
   <div id="stepStatus">歩数: <span id="stepCount">0</span>（構えていない間、傾きで移動）</div>
@@ -104,6 +105,7 @@
   var reloadBtn = document.getElementById('reloadBtn');
   var pauseBtn = document.getElementById('pauseBtn');
   var retryBtn = document.getElementById('retryBtn');
+  var titleBtn = document.getElementById('titleBtn');
   var rawEl = document.getElementById('raw');
   var stepCountEl = document.getElementById('stepCount');
   var verticalAxisSelect = document.getElementById('verticalAxisSelect');
@@ -176,15 +178,17 @@
       reloadBtn.disabled = false;
       pauseBtn.disabled = false;
       retryBtn.disabled = false;
+      titleBtn.disabled = false;
     };
     ws.onclose = function () {
       setStatus('切断されました。もう一度「接続する」を押してください', 'error');
-      stopAiming();
+      setAiming(false);
       aimBtn.disabled = true;
       shootBtn.disabled = true;
       reloadBtn.disabled = true;
       pauseBtn.disabled = true;
       retryBtn.disabled = true;
+      titleBtn.disabled = true;
     };
     ws.onerror = function () {
       setStatus('接続エラー。PCと同じWi-Fiに接続しているか確認してください', 'error');
@@ -203,6 +207,41 @@
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({ type: type }));
   }
+
+  // --- スマホ側の操作音(オーナー要望、2026-09-06:「構える、構え内の切り替えや
+  // リロード時の効果音をスマホから流すことは可能？」) ---
+  // Unity側の着弾音等とは別に、「操作を受け付けた」ことをその場で伝える手触りの
+  // フィードバック。Unity側のProceduralSfxと同じ考え方(短い矩形波/正弦波を都度
+  // 生成)をWeb Audio APIで行う——音声アセットを持たずに済む。AudioContextは
+  // ユーザー操作(このページでは「接続する」タップ)の中で生成しないと多くの
+  // ブラウザでブロックされるため、接続ボタン押下時に初期化する。
+  var audioCtx = null;
+  function ensureAudioContext() {
+    if (audioCtx) return audioCtx;
+    var Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return null;
+    audioCtx = new Ctor();
+    return audioCtx;
+  }
+  function playTone(frequencyHz, durationMs, type) {
+    var ctx = ensureAudioContext();
+    if (!ctx) return;
+    var oscillator = ctx.createOscillator();
+    var gain = ctx.createGain();
+    oscillator.type = type || 'square';
+    oscillator.frequency.value = frequencyHz;
+    gain.gain.value = 0.15;
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    var now = ctx.currentTime;
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + durationMs / 1000);
+    oscillator.start(now);
+    oscillator.stop(now + durationMs / 1000);
+  }
+  function playAimOnTone() { playTone(880, 60, 'square'); }
+  function playAimOffTone() { playTone(440, 60, 'square'); }
+  function playReloadTone() { playTone(660, 90, 'triangle'); }
 
   // --- リロードのジェスチャー検知(オーナー要望、2026-09-06) ---
   // 「スマホを上方向に素早く向けて戻す」動作でリロードする。上下どちら向きが
@@ -260,6 +299,7 @@
 
     if (checkReloadFlickGesture(Date.now(), remapped.beta)) {
       sendMessage('reload');
+      playReloadTone();
     }
   }
 
@@ -349,31 +389,26 @@
   });
 
   // 「構える」ボタン(オーナー要望、2026-09-06:「『構える』ボタンを新たに配置して、
-  // 構えている間は照準を動かして、構えていない間は移動する」)。押している間だけ
-  // "aim_start"、離したら"aim_end"を送る(Unity側はPhoneControllerServer.IsAiming参照)。
-  // pointerイベントはマウス/タッチの両方を1本のAPIで扱える。
+  // 構えている間は照準を動かして、構えていない間は移動する」)。
   //
-  // 修正(2026-09-06、オーナー報告「構えている間に弾を撃つを押しても、弾が出ません」):
-  // 当初はpointerleaveでも構えを解除していたが、スマホを傾けながら押し続けると
-  // 指が画面上でわずかにボタンの外へずれてpointerleaveが発火し、「撃つ」を押す前に
-  // 構えが解除されてしまっていた。setPointerCapture()でこの指の入力をボタンに
-  // 固定し、要素の外に出てもpointerup/pointercancelまで構え続けるようにした。
-  function startAiming() {
-    if (aimBtn.disabled) return;
-    sendMessage('aim_start');
-    aimBtn.classList.add('active');
-  }
-  function stopAiming() {
-    sendMessage('aim_end');
-    aimBtn.classList.remove('active');
+  // 当初は「押している間だけ構える」長押し方式("aim_start"/"aim_end"を押下/離す
+  // タイミングで送る)だったが、オーナー要望(2026-09-06:「構える、構えないは長押し
+  // ではなくボタンによる切り替え式にして」)によりタップ切り替え式に変更した。
+  // 押すたびに状態を反転させ、その時点の状態に応じて"aim_start"/"aim_end"を送る
+  // (Unity側の受け口(PhoneControllerServer.IsAiming)はレベルで見るだけなので、
+  // 送信タイミングが「押した瞬間」に変わっただけで変更不要)。
+  var isAiming = false;
+  function setAiming(aiming) {
+    isAiming = aiming;
+    sendMessage(isAiming ? 'aim_start' : 'aim_end');
+    aimBtn.classList.toggle('active', isAiming);
+    if (isAiming) playAimOnTone(); else playAimOffTone();
   }
   aimBtn.addEventListener('pointerdown', function (e) {
     e.preventDefault();
-    try { aimBtn.setPointerCapture(e.pointerId); } catch (err) { /* 未対応環境でも無視して続行 */ }
-    startAiming();
+    if (aimBtn.disabled) return;
+    setAiming(!isAiming);
   });
-  aimBtn.addEventListener('pointerup', stopAiming);
-  aimBtn.addEventListener('pointercancel', stopAiming);
 
   // 修正(2026-09-06、オーナー報告「構えたボタンは長押しにしたままで、撃つボタンを
   // 押すアクションを取っていますが撃てません」): 「撃つ」は常に「構える」を押した
@@ -389,6 +424,7 @@
   reloadBtn.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     sendMessage('reload');
+    playReloadTone();
   });
 
   pauseBtn.addEventListener('pointerdown', function (e) {
@@ -402,6 +438,14 @@
   retryBtn.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     sendMessage('retry');
+  });
+
+  // 起動画面へ戻る(オーナー要望、2026-09-06:「練習モードから起動画面に戻るボタンを
+  // スマホに配置して」)。練習モードはステージクリアが無く自動では終わらないため、
+  // 抜ける手段が要る——練習モードに限らずどのシーンでも使える。
+  titleBtn.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    sendMessage('title');
   });
 })();
 </script>

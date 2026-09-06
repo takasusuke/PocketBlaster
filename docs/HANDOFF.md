@@ -17,6 +17,49 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 起動画面の背景画像・構えのタップ切り替え化・視点リセット・練習モード拡充（2026-09-06）
+
+- **起動画面の背景画像**（オーナー要望「起動画面の背景に使える一枚絵を作成して
+  適用して」）: ローカル画像生成(1920×1080)で1枚作成し、`Assets/Resources/UI/
+  title_background.png`として`TitleScreenController`に適用した(`Resources.Load
+  <Texture2D>`+`ScaleMode.ScaleAndCrop`)。`~/AIFiles/assets/PocketBlaster/UI/`にも
+  複製済み。
+- **「構える」を長押しからタップ切り替えへ**（オーナー要望「構える、構えないは
+  長押しではなくボタンによる切り替え式にして」）: `webapp/index.html`の`aimBtn`を
+  pointerdownのたびに状態を反転させる方式に書き換えた。Unity側(`PhoneControllerServer.
+  IsAiming`)は"aim_start"/"aim_end"を受けてtrue/falseにするだけなので変更不要。
+- **構えていない間の上下感度を下げ、リロードで視点リセット**（オーナー要望
+  「構えていない状態の上下方向の感度は少し低くしてください」「構えていない状態で
+  リロード完了すると、上下方向の視点は初期状態に戻るようにして」）:
+  `PlayerLocomotion.lookPitchSensitivityMultiplier`(0.7、上下だけに掛ける)を追加。
+  `GyroReticleController`に`OnReloadCompleted`イベントを新設し、`PlayerLocomotion`が
+  購読して構えていない間はリロード完了のたびに上下の視点を水平へ戻す
+  (`_lookPitch=0`、左右は維持)。
+- **スマホから「タイトルへ戻る」**（オーナー要望「練習モードから起動画面に戻る
+  ボタンをスマホに配置して」）: `PhoneControllerServer`に`OnReturnToTitleRequested`
+  (メッセージ`"title"`)を追加し、`GameSession`が購読して`Title`へ即遷移する。
+  全シーンで使える。
+- **スマホ操作音**（オーナー要望「構える、構え内の切り替えやリロード時の効果音を
+  スマホから流すことは可能？」への回答として実装）: Web Audio APIで矩形波/三角波を
+  都度生成し、構えるON/OFF・リロードのたびにスマホのスピーカーから鳴らす
+  (`webapp/index.html`の`playTone`系関数)。音声アセット不要、Unity側の
+  `ProceduralSfx`と同じ考え方。
+- **練習モードにも障害物・パルクールを追加**（オーナー要望「練習モードにオブジェクトを
+  配置して」）: `PracticeRangeSceneBuilder`に`FieldObstacleScatterer.Scatter`/
+  `BuildParkourStaircase`を追加した(他ステージと同じ構成)。
+- **未回答（コード変更なし、要実機確認）**: 「Safariだけでなく、BraveやChromeでも
+  実行できるようにできる？」への回答は`docs/requirements.md`§7#7に記録した——
+  証明書信頼設定はOS単位のためコード変更は不要という見立てだが、Chrome/Brave実機での
+  確認はまだ。「複数プレイヤー・スマホをディスプレイに使う拡張は可能か」も
+  §7#8に検討事項として記録(現状は§6「対象外」のマルチプレイヤー除外と矛盾するため
+  実装方針は未定)。
+- **確認方法**: EditMode 62件全て通過。Milestone3/4・Stage2・PracticeRangeの4シーンを
+  再ビルドし、`lookPitchSensitivityMultiplier`・`returnToTitleDelaySeconds`・
+  PracticeRangeのFieldObstacle/Parkour追加を確認した。Titleシーンは背景画像が
+  ランタイムロードのため再ビルド不要。**実機(Play Mode)での動作確認はまだ**——
+  背景画像の見え方、構えのタップ切り替えの操作感、上下感度0.7倍・リロード視点
+  リセットの体感、スマホ操作音の音量バランス、いずれも未検証。
+
 ## 起動画面への自動復帰・移動速度/範囲拡大・練習モード新設（2026-09-06）
 
 - **ステージ終了後は起動画面へ自動復帰**（オーナー要望「ステージ終了後は起動画面に

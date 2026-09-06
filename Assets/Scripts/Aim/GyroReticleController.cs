@@ -83,6 +83,16 @@ namespace PocketBlaster.Aim
         public event Action<bool> OnShotResolved;
 
         /// <summary>
+        /// リロード(弾切れ自動・手動・アイテムのいずれか)が完了した瞬間に1回だけ呼ばれる。
+        /// PlayerLocomotionが購読し、構えていない間はこれをきっかけに視界の上下(pitch)を
+        /// 初期状態へ戻す(オーナー要望2026-09-06:「構えていない状態でリロード完了すると、
+        /// 上下方向の視点は初期状態に戻るようにして」)。ここでの狙いの再キャリブレーション
+        /// (Recenter、手動リロードのみ)とは別の関心事——判定は購読側(PlayerLocomotion)が
+        /// `_server.IsAiming`を見て行う。
+        /// </summary>
+        public event Action OnReloadCompleted;
+
+        /// <summary>
         /// キャリブレーション(初回接続後の「リロード」操作)が完了しているか。
         /// EnemyApproachが「スマホが接続してアクションを取るまで敵を近づかせない」
         /// (オーナー要望、2026-09-06)ために参照する。
@@ -201,10 +211,13 @@ namespace PocketBlaster.Aim
             _offsetX = gammaDelta * horizontalSensitivity;
             _offsetY = betaDelta * verticalSensitivity;
 
-            // 「構える」ボタンを押している間だけ傾きを照準に使う(オーナー要望、2026-09-06:
+            // 「構える」ボタンがオンの間だけ傾きを照準に使う(オーナー要望、2026-09-06:
             // 「構えている間は照準を動かして、構えていない間は移動する」— 傾きは1系統しか
-            // 無いため、狙いと移動のどちらに使うかをボタンで切り替える。PlayerLocomotion
-            // 参照)。マウスデバッグは実機の代役なので、この切り替えの影響を受けない。
+            // 無いため、狙いと移動のどちらに使うかをボタンで切り替える。切り替え方式自体は
+            // 長押しからタップ式トグルへ変更した(2026-09-06、PhoneControllerServer.
+            // IsAiming参照)が、ここで見ているのは切り替え後の状態(IsAiming)だけなので
+            // 影響は無い。PlayerLocomotion参照)。マウスデバッグは実機の代役なので、
+            // この切り替えの影響を受けない。
             //
             // 構えていない間も「今向いている方向」を示すカーソルを画面中央に表示する
             // (オーナー要望、2026-09-06:「構えていない時も、向いている方向を示すために
@@ -370,6 +383,7 @@ namespace PocketBlaster.Aim
             _ammo.Reload();
             if (recenterOnComplete) Recenter();
             _isReloading = false;
+            OnReloadCompleted?.Invoke();
         }
 
         /// <summary>

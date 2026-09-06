@@ -85,6 +85,7 @@ namespace PocketBlaster.Gameplay
 
             _server.OnPauseToggleRequested += HandlePauseToggleRequested;
             _server.OnRetryRequested += HandleRetryRequested;
+            _server.OnReturnToTitleRequested += HandleReturnToTitleRequested;
             if (stageDirector != null)
             {
                 stageDirector.OnEnemyReachedPlayer += HandleEnemyReachedPlayer;
@@ -102,6 +103,7 @@ namespace PocketBlaster.Gameplay
             {
                 _server.OnPauseToggleRequested -= HandlePauseToggleRequested;
                 _server.OnRetryRequested -= HandleRetryRequested;
+                _server.OnReturnToTitleRequested -= HandleReturnToTitleRequested;
             }
             if (stageDirector != null)
             {
@@ -124,6 +126,18 @@ namespace PocketBlaster.Gameplay
             Time.timeScale = _isPaused ? 0f : 1f;
             if (reticleController != null) reticleController.enabled = !_isPaused;
             _pauseLabel.style.display = _isPaused ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        /// <summary>
+        /// スマホからの「起動画面へ戻る」要求(オーナー要望、2026-09-06:「練習モードから
+        /// 起動画面に戻るボタンをスマホに配置して」)。練習モードには自動終了が無い
+        /// (StageDirectorのステージクリアが無い)ため、抜ける手段が必要だった。
+        /// 練習モードに限らず、どのシーンからでも使える。
+        /// </summary>
+        private void HandleReturnToTitleRequested()
+        {
+            Time.timeScale = 1f;
+            SceneManager.LoadScene("Title");
         }
 
         private void HandleRetryRequested()
