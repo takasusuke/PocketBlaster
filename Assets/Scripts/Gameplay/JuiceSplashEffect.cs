@@ -16,6 +16,12 @@ namespace PocketBlaster.Gameplay
             go.transform.position = position;
 
             var ps = go.AddComponent<ParticleSystem>();
+            // AddComponent<ParticleSystem>()はplayOnAwake既定trueのため、この時点で
+            // Awake/OnEnableが同期的に走りもう再生中になっている。再生中はmain.durationを
+            // 変更できない("Setting the duration while system is still playing is not
+            // supported"エラー)ため、設定前に一度明示的に止める。
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
             var main = ps.main;
             main.duration = 0.2f;
             main.loop = false;
@@ -35,6 +41,8 @@ namespace PocketBlaster.Gameplay
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
             renderer.material = new Material(Shader.Find("Sprites/Default"));
+
+            ps.Play();
 
             Object.Destroy(go, main.duration + main.startLifetime.constantMax + 0.5f);
         }
