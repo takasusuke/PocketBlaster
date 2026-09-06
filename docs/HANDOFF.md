@@ -2,18 +2,24 @@
 
 セッションを立て直したら、まずここを読む。詳細は[`requirements.md`](requirements.md)。
 
-**シーンを作成・更新した後、Unity EditorのGUIを再起動する前に必ず`SceneLauncher`で
-そのシーンを開いた状態にする**（オーナー要望、2026-09-06:
-「Unityで開くべきシーンは、デフォルトシーンに随時設定するようにして」）。
-Unity Editorは最後に開いていたシーンを次回GUI起動時に自動で復元するため、これをやらないと
-（特にEditModeテストの実行等、シーン作成後に別のバッチ操作を挟んだ場合）意図しないシーンが
-開いた状態でGUIが起動してしまう。
+**Unity EditorのGUIを起動する時は、開くべきシーンのファイルパスを起動引数に直接渡す**
+（オーナー要望、2026-09-06: 「Unityで開くべきシーンは、デフォルトシーンに随時設定する
+ようにして」）。
 
+```powershell
+Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @(
+  '-projectPath', '<projectPath>',
+  '<projectPath>\Assets\Scenes\<シーン名>.unity'
+)
 ```
-Unity.exe -batchmode -nographics -projectPath <projectPath>
-  -openScenePath "Assets/Scenes/<シーン名>.unity"
-  -executeMethod PocketBlaster.EditorTools.SceneLauncher.OpenSceneFromArgs -quit
-```
+
+**バッチモードでシーンを開いて`-quit`する方式(`SceneLauncher.cs`として一度実装した)は
+効かないことを確認済み(2026-09-06、削除済み)** — Unity Editorが次回GUI起動時に復元する
+「最後に開いていたシーン」はウィンドウレイアウトの一部としてGUIセッションでしか
+保存されないらしく、バッチモードでの`EditorSceneManager.OpenScene`→`-quit`では
+反映されなかった(実際に「Untitled Scene」が開いてしまうことを確認)。
+**GUI起動時の引数指定が正しい方法。** Editor.logの`Loaded scene '...'`で
+実際にどのシーンが開いたかを確認できる。
 
 ## 現状（2026-09-06）
 
