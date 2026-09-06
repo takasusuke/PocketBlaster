@@ -14,7 +14,8 @@ namespace PocketBlaster.Networking
     /// を開くと、このスクリプトがページを配信し、続けて開かれるWebSocket接続から
     /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")・
     /// 足踏み検知("step"、PlayerLocomotion参照)・
-    /// 一時停止("pause")・再挑戦("retry"、いずれもGameSession参照)を受け取る。
+    /// 一時停止("pause")・再挑戦("retry"、いずれもGameSession参照)・
+    /// 構えの開始/終了("aim_start"/"aim_end"、IsAiming参照)を受け取る。
     /// 難易度モードは2026-09-06に起動画面(Title)側へ移したため、ここでは扱わない
     /// (GameSettings/GameSession参照)。
     ///
@@ -59,6 +60,16 @@ namespace PocketBlaster.Networking
         public event Action OnStep;
         public event Action OnPauseToggleRequested;
         public event Action OnRetryRequested;
+
+        /// <summary>
+        /// スマホ側の「構える」ボタンを押している間だけtrue(オーナー要望、2026-09-06:
+        /// 「『構える』ボタンを新たに配置して、構えている間は照準を動かして、構えて
+        /// いない間は移動する」)。スマホの傾きは1系統しか無いため、狙い(照準)と
+        /// 移動(歩き回り)のどちらに使うかをこのボタンで明示的に切り替える設計にした。
+        /// GyroReticleControllerが照準の有効/無効に、PlayerLocomotionが移動方向の
+        /// 入力切り替えに、それぞれこれを見る。
+        /// </summary>
+        public bool IsAiming { get; private set; }
 
         public bool IsConnected { get; private set; }
         public float LatestAlpha { get; private set; }
@@ -134,6 +145,12 @@ namespace PocketBlaster.Networking
                         break;
                     case "retry":
                         OnRetryRequested?.Invoke();
+                        break;
+                    case "aim_start":
+                        IsAiming = true;
+                        break;
+                    case "aim_end":
+                        IsAiming = false;
                         break;
                 }
             }

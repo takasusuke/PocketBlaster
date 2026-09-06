@@ -30,6 +30,12 @@
   }
   #connectBtn { background: #4C6FFF; color: white; }
   #connectBtn:disabled { background: #333; color: #888; }
+  #aimBtn {
+    background: #2E7D5B; color: white; font-size: 22px; font-weight: 700;
+    padding: 24px; max-width: 420px; border: 3px solid transparent;
+  }
+  #aimBtn.active { background: #3DDC97; color: #05261a; border-color: #fff; }
+  #aimBtn:disabled { background: #333; color: #888; border-color: transparent; }
   #shootBtn { background: #E23B3B; color: white; font-size: 32px; font-weight: 700; padding: 40px; max-width: 420px; }
   #shootBtn:disabled { background: #333; color: #888; }
   #reloadBtn { background: #FF7A45; color: white; font-size: 24px; font-weight: 600; padding: 26px; max-width: 420px; }
@@ -79,6 +85,7 @@
     </div>
   </details>
   <button id="connectBtn">接続する</button>
+  <button id="aimBtn" disabled>構える（押している間だけ狙える）</button>
   <button id="shootBtn" disabled>撃つ</button>
   <button id="reloadBtn" disabled>リロード（弾を補充し、狙いを基準位置にリセット）</button>
   <div id="subControls">
@@ -86,12 +93,13 @@
     <button id="retryBtn" disabled>再挑戦</button>
   </div>
   <div id="raw"></div>
-  <div id="stepStatus">歩数: <span id="stepCount">0</span>（狙っている方向へ移動）</div>
+  <div id="stepStatus">歩数: <span id="stepCount">0</span>（構えていない間、傾きで移動）</div>
 </div>
 <script>
 (function () {
   var statusEl = document.getElementById('status');
   var connectBtn = document.getElementById('connectBtn');
+  var aimBtn = document.getElementById('aimBtn');
   var shootBtn = document.getElementById('shootBtn');
   var reloadBtn = document.getElementById('reloadBtn');
   var pauseBtn = document.getElementById('pauseBtn');
@@ -163,6 +171,7 @@
 
     ws.onopen = function () {
       setStatus('接続済み\n' + url, 'connected');
+      aimBtn.disabled = false;
       shootBtn.disabled = false;
       reloadBtn.disabled = false;
       pauseBtn.disabled = false;
@@ -170,6 +179,8 @@
     };
     ws.onclose = function () {
       setStatus('切断されました。もう一度「接続する」を押してください', 'error');
+      stopAiming();
+      aimBtn.disabled = true;
       shootBtn.disabled = true;
       reloadBtn.disabled = true;
       pauseBtn.disabled = true;
@@ -337,6 +348,24 @@
       });
   });
 
+  // 「構える」ボタン(オーナー要望、2026-09-06:「『構える』ボタンを新たに配置して、
+  // 構えている間は照準を動かして、構えていない間は移動する」)。押している間だけ
+  // "aim_start"、離したら"aim_end"を送る(Unity側はPhoneControllerServer.IsAiming参照)。
+  // pointerイベントはマウス/タッチの両方を1本のAPIで扱える。
+  function startAiming() {
+    if (aimBtn.disabled) return;
+    sendMessage('aim_start');
+    aimBtn.classList.add('active');
+  }
+  function stopAiming() {
+    sendMessage('aim_end');
+    aimBtn.classList.remove('active');
+  }
+  aimBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); startAiming(); });
+  aimBtn.addEventListener('pointerup', stopAiming);
+  aimBtn.addEventListener('pointercancel', stopAiming);
+  aimBtn.addEventListener('pointerleave', stopAiming);
+
   shootBtn.addEventListener('click', function () {
     sendMessage('shoot');
   });
@@ -349,9 +378,9 @@
     sendMessage('pause');
   });
 
-  // 再挑戦はUnity側でシーンを丸ごとリロードする(GameSession参照)。シーン内の
-  // サーバーごと作り直されるためこのWebSocket接続も切れる — 再接続が必要になる
-  // (未検証・実機確認待ち、docs/HANDOFF.md参照)。
+  // 再挑戦はUnity側でシーンを丸ごとリロードする(GameSession参照)。以前はサーバーごと
+  // 作り直されて接続も切れていたが、PhoneControllerServerを永続シングルトン化した
+  // ことで接続は維持されるようになった(2026-09-06、docs/HANDOFF.md参照)。
   retryBtn.addEventListener('click', function () {
     sendMessage('retry');
   });

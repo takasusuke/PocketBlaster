@@ -191,26 +191,39 @@ namespace PocketBlaster.Aim
             _offsetX = gammaDelta * horizontalSensitivity;
             _offsetY = betaDelta * verticalSensitivity;
 
-            float x, y;
-            if (IsMouseDebugActive)
-            {
-                // UI Toolkitは左上原点・下方向がプラスだが、Input.mousePositionは
-                // 左下原点・上方向がプラスなのでYを反転する。
-                x = Mathf.Clamp(Input.mousePosition.x, 0, Screen.width);
-                y = Mathf.Clamp(Screen.height - Input.mousePosition.y, 0, Screen.height);
-            }
-            else
-            {
-                var halfW = Screen.width / 2f;
-                var halfH = Screen.height / 2f;
-                x = Mathf.Clamp(halfW + _offsetX, 0, Screen.width);
-                y = Mathf.Clamp(halfH + _offsetY, 0, Screen.height);
-            }
+            // 「構える」ボタンを押している間だけ傾きを照準に使う(オーナー要望、2026-09-06:
+            // 「構えている間は照準を動かして、構えていない間は移動する」— 傾きは1系統しか
+            // 無いため、狙いと移動のどちらに使うかをボタンで切り替える。PlayerLocomotion
+            // 参照)。マウスデバッグは実機の代役なので、この切り替えの影響を受けない。
+            // 構えていない間はレティクルを更新しない(最後の位置に凍結、半透明にして
+            // 「今は狙えない」ことを示す)。
+            var isAimActive = IsMouseDebugActive || _server.IsAiming;
+            _reticle.style.opacity = isAimActive ? 1f : 0.35f;
 
-            _reticleScreenX = x;
-            _reticleScreenY = y;
-            _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
-            _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
+            var x = _reticleScreenX;
+            var y = _reticleScreenY;
+            if (isAimActive)
+            {
+                if (IsMouseDebugActive)
+                {
+                    // UI Toolkitは左上原点・下方向がプラスだが、Input.mousePositionは
+                    // 左下原点・上方向がプラスなのでYを反転する。
+                    x = Mathf.Clamp(Input.mousePosition.x, 0, Screen.width);
+                    y = Mathf.Clamp(Screen.height - Input.mousePosition.y, 0, Screen.height);
+                }
+                else
+                {
+                    var halfW = Screen.width / 2f;
+                    var halfH = Screen.height / 2f;
+                    x = Mathf.Clamp(halfW + _offsetX, 0, Screen.width);
+                    y = Mathf.Clamp(halfH + _offsetY, 0, Screen.height);
+                }
+
+                _reticleScreenX = x;
+                _reticleScreenY = y;
+                _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
+                _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
+            }
 
             // リロードアニメーション(オーナー要望、2026-09-06:「リロードアニメーションを
             // 実装して」)。レティクルの真下に進捗バーを追従表示する — レティクル自体は
@@ -275,6 +288,9 @@ namespace PocketBlaster.Aim
         {
             if (!_isCalibrated) return; // キャリブレーション完了前は撃てない
             if (_isReloading) return; // リロードアニメーション中は撃てない
+            // 「構える」ボタンを押していない間は撃てない(オーナー要望、2026-09-06)。
+            // マウスデバッグは実機の代役なので対象外。
+            if (!IsMouseDebugActive && !_server.IsAiming) return;
 
             if (!_ammo.Shoot())
             {
