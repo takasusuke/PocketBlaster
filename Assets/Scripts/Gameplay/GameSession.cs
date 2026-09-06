@@ -171,6 +171,7 @@ namespace PocketBlaster.Gameplay
         private void BuildUi()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            RuntimeLabelStyle.EnsureTheme(_panelSettings);
             // StageDirector.csと同じ理由でsortingOrderを明示する。
             _panelSettings.sortingOrder = 5;
 

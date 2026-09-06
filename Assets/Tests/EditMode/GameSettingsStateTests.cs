@@ -36,24 +36,35 @@ namespace PocketBlaster.Tests.EditMode
         }
 
         [Test]
-        public void SensitivityIsClampedToDefinedRange()
+        public void VerticalSensitivityIsClampedToDefinedRange()
         {
             var settings = GameSettingsState.CreateDefault();
-            settings.SetSensitivity(0f);
-            Assert.AreEqual(GameSettingsState.MinSensitivity, settings.Sensitivity);
-            settings.SetSensitivity(999f);
-            Assert.AreEqual(GameSettingsState.MaxSensitivity, settings.Sensitivity);
-            settings.SetSensitivity(10f);
-            Assert.AreEqual(10f, settings.Sensitivity);
+            settings.SetVerticalSensitivity(0f);
+            Assert.AreEqual(GameSettingsState.MinSensitivity, settings.VerticalSensitivity);
+            settings.SetVerticalSensitivity(999f);
+            Assert.AreEqual(GameSettingsState.MaxSensitivity, settings.VerticalSensitivity);
+            settings.SetVerticalSensitivity(10f);
+            Assert.AreEqual(10f, settings.VerticalSensitivity);
+        }
+
+        [Test]
+        public void HorizontalSensitivityIsClampedToDefinedRangeIndependentlyOfVertical()
+        {
+            var settings = GameSettingsState.CreateDefault();
+            settings.SetVerticalSensitivity(20f);
+            settings.SetHorizontalSensitivity(0f);
+            Assert.AreEqual(GameSettingsState.MinSensitivity, settings.HorizontalSensitivity);
+            Assert.AreEqual(20f, settings.VerticalSensitivity, "左右を変更しても上下の値は影響を受けないこと");
         }
 
         [Test]
         public void ConstructorAlsoClampsInvalidValues()
         {
-            var settings = new GameSettingsState(true, sfxVolume: 2f, sensitivity: 1f);
+            var settings = new GameSettingsState(true, sfxVolume: 2f, verticalSensitivity: 1f, horizontalSensitivity: 999f);
             Assert.IsTrue(settings.IsArcadeMode);
             Assert.AreEqual(1f, settings.SfxVolume);
-            Assert.AreEqual(GameSettingsState.MinSensitivity, settings.Sensitivity);
+            Assert.AreEqual(GameSettingsState.MinSensitivity, settings.VerticalSensitivity);
+            Assert.AreEqual(GameSettingsState.MaxSensitivity, settings.HorizontalSensitivity);
         }
     }
 }

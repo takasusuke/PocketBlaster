@@ -238,6 +238,7 @@ namespace PocketBlaster.Gameplay
         private void BuildUi()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            RuntimeLabelStyle.EnsureTheme(_panelSettings);
             // 複数のUIDocument(GyroReticleController・GameSession・ここ)がそれぞれ別の
             // PanelSettingsを実行時生成しているため、既定値(全て0)のままだと重なり順が
             // 不定になりうる。明示的に振っておく(レティクル/キャリブレーション画面が

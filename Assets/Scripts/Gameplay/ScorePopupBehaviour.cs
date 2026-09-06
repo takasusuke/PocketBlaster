@@ -49,6 +49,7 @@ namespace PocketBlaster.Gameplay
         private void BuildUi(int points)
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            RuntimeLabelStyle.EnsureTheme(_panelSettings);
             // HUD(StageDirector/GameSessionの5)より上、レティクル(10)より下に置く。
             _panelSettings.sortingOrder = 8;
 

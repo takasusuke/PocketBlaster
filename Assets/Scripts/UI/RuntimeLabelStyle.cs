@@ -12,11 +12,33 @@ namespace PocketBlaster.UI
     /// VisualElement(レティクル)は正しく描画されていたことから、テーマ全体ではなく
     /// テキスト描画だけがフォント未解決で欠落していると特定した)。
     /// Unity組み込みフォントを明示指定してテーマに依存せず描画させる。
+    ///
+    /// あわせて、ThemeStyleSheet未設定のPanelSettingsはUnity自身が
+    /// "No Theme Style Sheet set to PanelSettings, UI will not render properly"という
+    /// warningを出す(2026-09-06、ScorePopupBehaviourが敵を倒すたびに新規PanelSettingsを
+    /// 作るため大量に出て発覚)。中身が空でもThemeStyleSheetインスタンスを割り当てれば
+    /// このwarning自体は消える(実際の描画は上記のインラインstyle指定で賄っているため
+    /// 空のテーマで問題ない)。
     /// </summary>
     public static class RuntimeLabelStyle
     {
         private static Font _builtinFont;
         private static bool _lookedUpFont;
+        private static ThemeStyleSheet _blankTheme;
+
+        /// <summary>
+        /// 実行時生成のPanelSettingsに空のThemeStyleSheetを割り当て、Unity自身が出す
+        /// "No Theme Style Sheet"警告を消す。BuildUi()でPanelSettingsを作った直後に呼ぶ。
+        /// </summary>
+        public static void EnsureTheme(PanelSettings panelSettings)
+        {
+            if (panelSettings.themeStyleSheet != null) return;
+            if (_blankTheme == null)
+            {
+                _blankTheme = ScriptableObject.CreateInstance<ThemeStyleSheet>();
+            }
+            panelSettings.themeStyleSheet = _blankTheme;
+        }
 
         // Label・Button等、テキストを持つ要素はすべてTextElementを継承しているため
         // ここで一括して受ける(起動画面のButton/Sliderラベルでも同じ問題が起きるため)。

@@ -39,7 +39,11 @@ namespace PocketBlaster.Aim
     [RequireComponent(typeof(AudioSource))]
     public class GyroReticleController : MonoBehaviour
     {
-        [SerializeField] private float degreesToScreenPixels = 12f;
+        // 上下・左右で別々に持つ(オーナー要望、2026-09-06:「上下左右方向の感度を
+        // ユーザごとに調整できるようにしてください」)。既定値はAwakeでGameSettings
+        // (起動画面での設定、PlayerPrefs保存)の値に上書きされる。
+        [SerializeField] private float verticalSensitivity = 12f;
+        [SerializeField] private float horizontalSensitivity = 12f;
         [SerializeField] private int magazineSize = 6;
         [SerializeField] private float reloadDurationSeconds = 0.6f;
         [SerializeField] private Camera aimCamera;
@@ -120,8 +124,9 @@ namespace PocketBlaster.Aim
             _server.OnReload += HandleReload;
             _server.OnShoot += HandleShoot;
 
-            // 起動画面(Title)で選んだ感度・SE音量を適用する(2026-09-06)。
-            degreesToScreenPixels = GameSettings.Current.Sensitivity;
+            // 起動画面(Title)で選んだ感度(上下・左右別)・SE音量を適用する(2026-09-06)。
+            verticalSensitivity = GameSettings.Current.VerticalSensitivity;
+            horizontalSensitivity = GameSettings.Current.HorizontalSensitivity;
 
             _audioSource = GetComponent<AudioSource>();
             _audioSource.volume = GameSettings.Current.SfxVolume;
@@ -183,8 +188,8 @@ namespace PocketBlaster.Aim
             var betaDelta = Mathf.DeltaAngle(_refBeta, _server.LatestBeta);
             var gammaDelta = Mathf.DeltaAngle(_refGamma, _server.LatestGamma);
 
-            _offsetX = gammaDelta * degreesToScreenPixels;
-            _offsetY = betaDelta * degreesToScreenPixels;
+            _offsetX = gammaDelta * horizontalSensitivity;
+            _offsetY = betaDelta * verticalSensitivity;
 
             float x, y;
             if (IsMouseDebugActive)
@@ -382,6 +387,7 @@ namespace PocketBlaster.Aim
         private void BuildUi()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            RuntimeLabelStyle.EnsureTheme(_panelSettings);
             // 他のUIDocument(StageDirector・GameSession)より確実に手前に出す
             // (キャリブレーション画面やレティクルがHUDの下に隠れては困るため)。
             _panelSettings.sortingOrder = 10;

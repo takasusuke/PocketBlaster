@@ -27,6 +27,28 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
    （「ダブルクリックでシーンが開く」という一般的な理解は、少なくともこの起動経路
    （`Start-Process`での直接起動）には当てはまらなかった）
 
+## PanelSettingsのテーマ警告の解消・上下左右の感度分離・スマホボタン拡大（2026-09-06）
+
+- **"No Theme Style Sheet set to PanelSettings"警告の解消（実機確認済み）**: オーナーが
+  実際にコンソールで確認した警告。原因は既知（フォント未描画問題と同根 — 実行時生成の
+  `PanelSettings`にThemeStyleSheetが付かない）だが、今回`ScorePopupBehaviour`が敵を
+  倒すたびに新しい`PanelSettings`を作るため大量に出て顕在化した。
+  `RuntimeLabelStyle.EnsureTheme(PanelSettings)`を追加し、空の`ThemeStyleSheet`を
+  割り当てることでこの警告自体を消した（描画自体は既存のインラインstyle指定で
+  賄っているので、テーマの中身が空でも問題ない）。5箇所全てのPanelSettings生成箇所
+  （`GyroReticleController`・`StageDirector`・`GameSession`・`TitleScreenController`・
+  `ScorePopupBehaviour`）に適用した。
+- **上下左右の感度を分離（オーナー要望「上下左右方向の感度をユーザごとに調整できる
+  ようにしてください」、実装済み・未検証）**: これまで`degreesToScreenPixels`という
+  単一の値を上下・左右両方に使っていたが、`GameSettingsState`の`Sensitivity`を
+  `VerticalSensitivity`/`HorizontalSensitivity`の2値に分割した。起動画面の設定欄にも
+  スライダーを2本（「感度（上下）」「感度（左右）」）用意した。持ち方やスマホの機種で
+  上下・左右の振れやすさが違う場合に個別調整できるようにする狙い。
+- **スマホの「撃つ」「リロード」ボタンを拡大（オーナー要望、実装済み・未検証）**:
+  `webapp/index.html`で「撃つ」ボタンをfont-size 22px→32px・padding 28px→40pxへ、
+  「リロード」ボタンをfont-size 18px→24px・padding 16px→26pxへ、それぞれ拡大した
+  （`max-width`も360px→420pxに広げた）。
+
 ## 再挑戦での接続断の修正・起動画面のスマホ操作対応（2026-09-06、実装済み・未検証）
 
 オーナー報告「たしかに再挑戦すると、スマホとの接続が切れてしまいました」への対応と、

@@ -10,12 +10,15 @@ namespace PocketBlaster.Meta
     ///
     /// 難易度はこれまでスマホ側(webapp/index.html)の接続前ラジオボタンで選んでいたが、
     /// 起動画面をPC側に作るのに伴いこちらへ一本化した(GameSession参照)。
+    /// 感度は上下・左右を別々に持つ(2026-09-06、オーナー要望「上下左右方向の感度を
+    /// ユーザごとに調整できるようにしてください」)。
     /// </summary>
     public static class GameSettings
     {
         private const string ModeKey = "PocketBlaster.Settings.IsArcadeMode";
         private const string SfxVolumeKey = "PocketBlaster.Settings.SfxVolume";
-        private const string SensitivityKey = "PocketBlaster.Settings.Sensitivity";
+        private const string VerticalSensitivityKey = "PocketBlaster.Settings.VerticalSensitivity";
+        private const string HorizontalSensitivityKey = "PocketBlaster.Settings.HorizontalSensitivity";
 
         private static GameSettingsState _current;
 
@@ -40,9 +43,15 @@ namespace PocketBlaster.Meta
             Save();
         }
 
-        public static void SetSensitivity(float value)
+        public static void SetVerticalSensitivity(float value)
         {
-            Current.SetSensitivity(value);
+            Current.SetVerticalSensitivity(value);
+            Save();
+        }
+
+        public static void SetHorizontalSensitivity(float value)
+        {
+            Current.SetHorizontalSensitivity(value);
             Save();
         }
 
@@ -52,14 +61,16 @@ namespace PocketBlaster.Meta
             return new GameSettingsState(
                 PlayerPrefs.GetInt(ModeKey, def.IsArcadeMode ? 1 : 0) == 1,
                 PlayerPrefs.GetFloat(SfxVolumeKey, def.SfxVolume),
-                PlayerPrefs.GetFloat(SensitivityKey, def.Sensitivity));
+                PlayerPrefs.GetFloat(VerticalSensitivityKey, def.VerticalSensitivity),
+                PlayerPrefs.GetFloat(HorizontalSensitivityKey, def.HorizontalSensitivity));
         }
 
         private static void Save()
         {
             PlayerPrefs.SetInt(ModeKey, Current.IsArcadeMode ? 1 : 0);
             PlayerPrefs.SetFloat(SfxVolumeKey, Current.SfxVolume);
-            PlayerPrefs.SetFloat(SensitivityKey, Current.Sensitivity);
+            PlayerPrefs.SetFloat(VerticalSensitivityKey, Current.VerticalSensitivity);
+            PlayerPrefs.SetFloat(HorizontalSensitivityKey, Current.HorizontalSensitivity);
             PlayerPrefs.Save();
         }
     }

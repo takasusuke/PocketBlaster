@@ -43,7 +43,8 @@ namespace PocketBlaster.UI
         private Button _casualButton;
         private Button _arcadeButton;
         private Label _sfxVolumeLabel;
-        private Label _sensitivityLabel;
+        private Label _verticalSensitivityLabel;
+        private Label _horizontalSensitivityLabel;
 
         private PhoneControllerServer _server;
         private VisualElement _phoneReticle;
@@ -100,10 +101,9 @@ namespace PocketBlaster.UI
 
             var betaDelta = Mathf.DeltaAngle(_refBeta, _server.LatestBeta);
             var gammaDelta = Mathf.DeltaAngle(_refGamma, _server.LatestGamma);
-            var degreesToScreenPixels = GameSettings.Current.Sensitivity;
 
-            _cursorX = Mathf.Clamp(Screen.width / 2f + gammaDelta * degreesToScreenPixels, 0, Screen.width);
-            _cursorY = Mathf.Clamp(Screen.height / 2f + betaDelta * degreesToScreenPixels, 0, Screen.height);
+            _cursorX = Mathf.Clamp(Screen.width / 2f + gammaDelta * GameSettings.Current.HorizontalSensitivity, 0, Screen.width);
+            _cursorY = Mathf.Clamp(Screen.height / 2f + betaDelta * GameSettings.Current.VerticalSensitivity, 0, Screen.height);
 
             _phoneReticle.style.display = DisplayStyle.Flex;
             _phoneReticle.style.left = _cursorX - _phoneReticle.resolvedStyle.width / 2f;
@@ -158,6 +158,7 @@ namespace PocketBlaster.UI
         private void BuildUi()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            RuntimeLabelStyle.EnsureTheme(_panelSettings);
 
             var uiDocumentGo = new GameObject("TitleScreenUI");
             uiDocumentGo.transform.SetParent(transform, false);
@@ -218,20 +219,37 @@ namespace PocketBlaster.UI
             panel.Add(sfxSlider);
             UpdateSfxVolumeLabel();
 
-            _sensitivityLabel = BuildValueLabel();
-            panel.Add(_sensitivityLabel);
-            var sensitivitySlider = new Slider(GameSettingsState.MinSensitivity, GameSettingsState.MaxSensitivity)
+            // 上下・左右で別々に調整できるようにする(オーナー要望、2026-09-06:
+            // 「上下左右方向の感度をユーザごとに調整できるようにしてください」)。
+            _verticalSensitivityLabel = BuildValueLabel();
+            panel.Add(_verticalSensitivityLabel);
+            var verticalSlider = new Slider(GameSettingsState.MinSensitivity, GameSettingsState.MaxSensitivity)
             {
-                value = GameSettings.Current.Sensitivity
+                value = GameSettings.Current.VerticalSensitivity
             };
-            sensitivitySlider.style.marginBottom = 24;
-            sensitivitySlider.RegisterValueChangedCallback(evt =>
+            verticalSlider.style.marginBottom = 12;
+            verticalSlider.RegisterValueChangedCallback(evt =>
             {
-                GameSettings.SetSensitivity(evt.newValue);
-                UpdateSensitivityLabel();
+                GameSettings.SetVerticalSensitivity(evt.newValue);
+                UpdateVerticalSensitivityLabel();
             });
-            panel.Add(sensitivitySlider);
-            UpdateSensitivityLabel();
+            panel.Add(verticalSlider);
+            UpdateVerticalSensitivityLabel();
+
+            _horizontalSensitivityLabel = BuildValueLabel();
+            panel.Add(_horizontalSensitivityLabel);
+            var horizontalSlider = new Slider(GameSettingsState.MinSensitivity, GameSettingsState.MaxSensitivity)
+            {
+                value = GameSettings.Current.HorizontalSensitivity
+            };
+            horizontalSlider.style.marginBottom = 24;
+            horizontalSlider.RegisterValueChangedCallback(evt =>
+            {
+                GameSettings.SetHorizontalSensitivity(evt.newValue);
+                UpdateHorizontalSensitivityLabel();
+            });
+            panel.Add(horizontalSlider);
+            UpdateHorizontalSensitivityLabel();
 
             panel.Add(BuildSectionLabel("ステージを選んでスタート"));
             var stage1Button = BuildStartButton(stage1DisplayName, () => StartStage(stage1SceneName));
@@ -277,9 +295,14 @@ namespace PocketBlaster.UI
             _sfxVolumeLabel.text = $"SE音量: {Mathf.RoundToInt(GameSettings.Current.SfxVolume * 100)}%";
         }
 
-        private void UpdateSensitivityLabel()
+        private void UpdateVerticalSensitivityLabel()
         {
-            _sensitivityLabel.text = $"感度: {GameSettings.Current.Sensitivity:F1}";
+            _verticalSensitivityLabel.text = $"感度（上下）: {GameSettings.Current.VerticalSensitivity:F1}";
+        }
+
+        private void UpdateHorizontalSensitivityLabel()
+        {
+            _horizontalSensitivityLabel.text = $"感度（左右）: {GameSettings.Current.HorizontalSensitivity:F1}";
         }
 
         private static Label BuildSectionLabel(string text)
