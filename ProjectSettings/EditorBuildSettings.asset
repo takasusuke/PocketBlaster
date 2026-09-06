@@ -4,6 +4,18 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Milestone1_GyroAimTest.unity
+    guid: 7927a9b7675507444a6b018de5561a21
+  - enabled: 1
+    path: Assets/Scenes/Milestone3_ShootTarget.unity
+    guid: 35713fc3ab78cec47824430793ab660d
+  - enabled: 1
+    path: Assets/Scenes/Milestone4_Stage.unity
+    guid: eadcca00c1bfe1040b2066bdd4ba00ff
+  - enabled: 1
+    path: Assets/Scenes/Stage2_BossRush.unity
+    guid: 5cfb255e6eb2bba4b95b56ae54ea4513
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

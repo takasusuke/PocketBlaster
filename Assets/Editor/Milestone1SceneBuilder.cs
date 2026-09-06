@@ -40,6 +40,7 @@ namespace PocketBlaster.EditorTools
             }
 
             EditorSceneManager.SaveScene(scene, ScenePath);
+            BuildSettingsHelper.EnsureSceneInBuildSettings(ScenePath);
             Debug.Log($"[Milestone1SceneBuilder] シーンを保存しました: {ScenePath}");
         }
     }

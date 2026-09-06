@@ -27,6 +27,44 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
    （「ダブルクリックでシーンが開く」という一般的な理解は、少なくともこの起動経路
    （`Start-Process`での直接起動）には当てはまらなかった）
 
+## プレイテストFB対応（2026-09-06、実装済み・未検証）
+
+オーナーが実機で`Stage2_BossRush`等を遊んでみたフィードバック4件に対応した。
+
+1. **スコア表示をゲーム画面へ**: それまで右上に「ウェーブ/残り敵/スコア」を1つの
+   `Label`にまとめていたが、スコアだけを画面上部中央に大きく（`StageDirector`の
+   新しい`_scoreLabel`、32pt太字）独立表示するようにした。ウェーブ/残り敵の表示は
+   従来通り右上に残している。
+2. **敵の出現距離を離し、スケールを縮小**: 「敵が大きすぎて狙う要素が少ない」を受けて、
+   `Milestone4_Stage`・`Stage2_BossRush`の敵の出現z座標を大幅に離した
+   （以前z=6〜9・scale2〜4 → 現在z=14〜18・scale1.3〜2.4）。近づいてくる分の移動時間が
+   延びるので`EnemyApproach.approachSpeed`も0.6〜1.1へ上げ、ウェーブの長さ自体が
+   極端に伸びないよう調整した（`Stage2_BossRush`はウェーブが進むほど`approachSpeed`を
+   わずかに上げ、後半ほど緊迫感が増すようにした）。**未検証**: 新しい距離・速度の
+   組み合わせが「狙う要素」として適切か、approachSpeedを上げたことで逆に接近が
+   速すぎないかは実機で確認が必要。`Milestone3_ShootTarget`の固定的な仮の敵1体は
+   対象外（意図的に据え置き、繰り返し試す用途のため）。
+3. **初回キャリブレーション画面**: それまでリロード操作で無言のまま基準位置が
+   決まっていたが、`GyroReticleController`に明示的なキャリブレーション画面を追加した。
+   接続直後（`_isCalibrated == false`の間）はレティクル・ステータス表示を隠し、代わりに
+   「スマホを画面の中央に向けて構え、『リロード』を押してください」という案内を
+   中央に表示する。リロードで`Recenter()`が呼ばれるまでは`shoot`も無視する
+   （空撃ちにならないよう安全側にした）。
+4. **スマホ側からの一時停止・再挑戦**: `webapp/index.html`に「一時停止」「再挑戦」
+   ボタンを追加（`PhoneControllerServer`の新しい"pause"/"retry"メッセージ経由）。
+   `GameSession`が受け取り、一時停止は`Time.timeScale`を0/1で切り替えつつ
+   `GyroReticleController`を明示的に無効化（射撃はtimeScaleの影響を受けないため）、
+   画面中央に「一時停止中」を表示する。再挑戦は`SceneManager.LoadScene`で現在の
+   シーンを丸ごとリロードする（スコア・残機・ウェーブ進行が初期化される）。
+   `SceneManager.LoadScene(buildIndex)`にはBuild Settingsへの登録が要るため、
+   共通ヘルパー`Assets/Editor/BuildSettingsHelper.cs`を新規作成し、4本の
+   シーンビルダー全てに`EnsureSceneInBuildSettings`呼び出しを追加した。
+   **未検証（重要）**: シーンリロードでサーバーごと(`PhoneControllerServer`)作り直される
+   ため、スマホ側のWebSocket接続もその瞬間に切れる可能性が高い。再接続が必要になるのか、
+   自動で繋がり直すのかは実機で未確認 — 切れた場合は「再挑戦を押したら一度切断され、
+   もう一度『接続する』を押す必要がある」という仕様として受け入れるか、UXとして
+   直すか実機確認後に判断する。
+
 ## 現状（2026-09-06）
 
 マイルストーン1〜5（`docs/requirements.md`§4）＋§8将来の拡張3項目を実装済み・自動テスト
@@ -153,7 +191,7 @@ the Dead等の古典的ライトガンゲームで使われる「カメラに正
   得点・残機・難易度モード（上記「将来の拡張」参照）。
 - `Assets/Editor/Stage2SceneBuilder.cs` → `Assets/Scenes/Stage2_BossRush.unity`:
   2本目のステージ（4ウェーブ、3発ヒットのボス）。
-- `Assets/Tests/EditMode/`: 計33件、すべてpass
+- `Assets/Tests/EditMode/`: 計48件、すべてpass（2026-09-06プレイテストFB対応後に再確認）
   （`PhoneOrientationServerTests`・`AmmoStateTests`・`TargetHitStateTests`・
   `ProceduralSfxTests`・`CertificateDownloadServerTests`・`StageProgressStateTests`・
   `PlayerOffsetStateTests`・`ScoreStateTests`・`LivesStateTests`）。

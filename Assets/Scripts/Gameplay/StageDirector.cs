@@ -54,6 +54,7 @@ namespace PocketBlaster.Gameplay
         private UIDocument _uiDocument;
         private PanelSettings _panelSettings;
         private Label _waveLabel;
+        private Label _scoreLabel;
 
         private void Awake()
         {
@@ -155,8 +156,8 @@ namespace PocketBlaster.Gameplay
         private void UpdateWaveLabel()
         {
             _waveLabel.text = $"ウェーブ {_progress.CurrentWaveIndex + 1}/{_progress.WaveCount}" +
-                               $"  残り敵: {_progress.RemainingInCurrentWave}\n" +
-                               $"スコア: {_score.TotalScore}";
+                               $"  残り敵: {_progress.RemainingInCurrentWave}";
+            _scoreLabel.text = $"スコア {_score.TotalScore}";
         }
 
         private void ShowStageClear()
@@ -192,6 +193,20 @@ namespace PocketBlaster.Gameplay
             _waveLabel.style.fontSize = 20;
             _waveLabel.style.unityTextAlign = TextAnchor.UpperRight;
             _uiDocument.rootVisualElement.Add(_waveLabel);
+
+            // スコアは狙っている最中も視界の端で常に見えるように、画面上部中央へ
+            // 大きく単独表示する(オーナーからのプレイテストFB、2026-09-06:
+            // 「スコア表示はゲーム画面のほうに出してください」)。
+            _scoreLabel = new Label();
+            _scoreLabel.style.position = Position.Absolute;
+            _scoreLabel.style.top = 12;
+            _scoreLabel.style.left = Length.Percent(50);
+            _scoreLabel.style.translate = new Translate(Length.Percent(-50), 0);
+            _scoreLabel.style.color = Color.white;
+            _scoreLabel.style.fontSize = 32;
+            _scoreLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _scoreLabel.style.unityTextAlign = TextAnchor.UpperCenter;
+            _uiDocument.rootVisualElement.Add(_scoreLabel);
         }
 
         private void OnDestroy()

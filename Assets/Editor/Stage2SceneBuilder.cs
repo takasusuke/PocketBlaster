@@ -69,32 +69,36 @@ namespace PocketBlaster.EditorTools
             light.intensity = 1.1f;
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
+            // オーナーからのプレイテストFB(2026-09-06)「敵が大きすぎて狙う要素が少ない。
+            // 遠くから小さいところから表示してほしい」を受けて、出現距離を離し
+            // スケールも控えめにした(以前はz=6-9・scale2-4)。ウェーブが進むほど
+            // approachSpeedを少し上げて、後半ほど緊迫感が増すようにしてある。
             var wave1Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-2f, 1.6f, 9f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_R", new Vector3(2f, 1.6f, 9f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-3f, 1.6f, 18f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_R", new Vector3(3f, 1.6f, 18f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
             };
 
             var wave2Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_L", new Vector3(-3f, 1.6f, 8f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 8.5f), onionSprite, OnionJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(3f, 1.6f, 8f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_L", new Vector3(-4f, 1.6f, 17f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 17.5f), onionSprite, OnionJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(4f, 1.6f, 17f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
             };
 
             var wave3Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_L", new Vector3(-3f, 1.6f, 7f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_ML", new Vector3(-1f, 1.6f, 7.5f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_MR", new Vector3(1f, 1.6f, 7.5f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_R", new Vector3(3f, 1.6f, 7f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_L", new Vector3(-4f, 1.6f, 16f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
+                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_ML", new Vector3(-1.3f, 1.6f, 16.5f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
+                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_MR", new Vector3(1.3f, 1.6f, 16.5f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
+                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_R", new Vector3(4f, 1.6f, 16f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
             };
 
             // ボス: 3発当てるまで倒れない(TargetHitStateのhitPoints)。1〜2発目は短いFlashだけで
             // またIdleに戻り、狙い続けられる。最後の1発でようやくKnockDown〜Defeatedへ進む。
             var bossEnemy = EnemyFactory.CreateVegetableZombie(
-                "Wave4_PumpkinBoss", new Vector3(0f, 2f, 6f), pumpkinSprite, PumpkinJuice, 4f, respawns: false,
-                approaches: true, approachSpeed: 0.35f);
+                "Wave4_PumpkinBoss", new Vector3(0f, 2f, 15f), pumpkinSprite, PumpkinJuice, 2.4f, respawns: false,
+                approaches: true, approachSpeed: 0.65f);
             ConfigureAsBoss(bossEnemy, hitPoints: 3, pointValue: 1000);
             var wave4Enemies = new[] { bossEnemy };
 
@@ -130,6 +134,7 @@ namespace PocketBlaster.EditorTools
             }
 
             EditorSceneManager.SaveScene(scene, ScenePath);
+            BuildSettingsHelper.EnsureSceneInBuildSettings(ScenePath);
             Debug.Log($"[Stage2SceneBuilder] シーンを保存しました: {ScenePath}");
         }
 

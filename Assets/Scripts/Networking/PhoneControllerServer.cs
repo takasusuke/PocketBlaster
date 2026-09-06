@@ -13,8 +13,8 @@ namespace PocketBlaster.Networking
     /// スマホのブラウザ(webapp/index.html)が同一Wi-Fi内から https://&lt;このPCのIP&gt;:port/
     /// を開くと、このスクリプトがページを配信し、続けて開かれるWebSocket接続から
     /// ジャイロ値("orientation")・リロード操作("reload")・発射操作("shoot")・
-    /// 足踏み検知("step"、PlayerLocomotion参照)・難易度モード選択("mode"、
-    /// GameSession参照)を受け取る。
+    /// 足踏み検知("step"、PlayerLocomotion参照)・難易度モード選択("mode")・
+    /// 一時停止("pause")・再挑戦("retry"、いずれもGameSession参照)を受け取る。
     ///
     /// httpsなのはiOS Safari等がhttpではDeviceOrientationEventを渡さないため
     /// (PhoneOrientationServer参照)。証明書は自己署名で、当初は「警告が出たら
@@ -34,6 +34,8 @@ namespace PocketBlaster.Networking
         public event Action OnShoot;
         public event Action OnStep;
         public event Action<string> OnModeSelected;
+        public event Action OnPauseToggleRequested;
+        public event Action OnRetryRequested;
 
         public bool IsConnected { get; private set; }
         public float LatestAlpha { get; private set; }
@@ -96,6 +98,12 @@ namespace PocketBlaster.Networking
                         break;
                     case "mode":
                         OnModeSelected?.Invoke(msg.mode);
+                        break;
+                    case "pause":
+                        OnPauseToggleRequested?.Invoke();
+                        break;
+                    case "retry":
+                        OnRetryRequested?.Invoke();
                         break;
                 }
             }

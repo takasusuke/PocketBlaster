@@ -27,6 +27,11 @@ namespace PocketBlaster.Aim
     ///
     /// UI ToolkitはPackages/manifest.jsonの追加なしで使えるため、PanelSettingsも
     /// 実行時に生成しシーンにアセットを持たせない。
+    ///
+    /// 初回キャリブレーション(オーナー要望、2026-09-06): 接続直後に自動でRecenter()する
+    /// のをやめ、「スマホを画面中央に向けて『リロード』を押してください」という明示的な
+    /// 画面を出して、プレイヤーが実際にそう構えた上で操作するのを待つ。ボタンを押す動作の
+    /// 最中の不安定な向きがそのまま基準になってしまう問題を避けるため。
     /// </summary>
     [RequireComponent(typeof(PhoneControllerServer))]
     [RequireComponent(typeof(AudioSource))]
@@ -56,8 +61,9 @@ namespace PocketBlaster.Aim
         private PanelSettings _panelSettings;
         private VisualElement _reticle;
         private Label _statusLabel;
+        private Label _calibrationLabel;
 
-        private bool _hasReference;
+        private bool _isCalibrated;
         private float _refBeta;
         private float _refGamma;
         private float _offsetX;
@@ -96,10 +102,20 @@ namespace PocketBlaster.Aim
 
         private void Update()
         {
-            if (!_hasReference && _server.IsConnected)
+            // 初回は自動でキャリブレーションせず、明示的な画面を出して「リロード」操作を
+            // 待つ(オーナー要望、2026-09-06: 接続直後の姿勢をそのまま基準にしてしまうと、
+            // ボタンを押す動作中の不安定な向きが基準になりかねないため)。
+            if (!_isCalibrated)
             {
-                Recenter();
+                _calibrationLabel.style.display = _server.IsConnected ? DisplayStyle.Flex : DisplayStyle.None;
+                _reticle.style.display = DisplayStyle.None;
+                _statusLabel.style.display = DisplayStyle.None;
+                return;
             }
+
+            _calibrationLabel.style.display = DisplayStyle.None;
+            _reticle.style.display = DisplayStyle.Flex;
+            _statusLabel.style.display = DisplayStyle.Flex;
 
             _timeSinceReload += Time.deltaTime;
             if (_emptyClickFlashTimer > 0f) _emptyClickFlashTimer -= Time.deltaTime;
@@ -143,6 +159,8 @@ namespace PocketBlaster.Aim
 
         private void HandleShoot()
         {
+            if (!_isCalibrated) return; // キャリブレーション完了前は撃てない
+
             if (!_ammo.Shoot())
             {
                 _emptyClickFlashTimer = 1f;
@@ -210,7 +228,7 @@ namespace PocketBlaster.Aim
         {
             _refBeta = _server.LatestBeta;
             _refGamma = _server.LatestGamma;
-            _hasReference = true;
+            _isCalibrated = true;
             _timeSinceReload = 0f;
         }
 
@@ -224,6 +242,24 @@ namespace PocketBlaster.Aim
             _uiDocument.panelSettings = _panelSettings;
 
             var root = _uiDocument.rootVisualElement;
+            root.style.justifyContent = Justify.Center;
+            root.style.alignItems = Align.Center;
+
+            _calibrationLabel = new Label(
+                "スマホを画面の中央に向けて構え、\n「リロード」を押してください\n（狙いの基準を決めます）");
+            _calibrationLabel.style.color = Color.white;
+            _calibrationLabel.style.fontSize = 26;
+            _calibrationLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _calibrationLabel.style.backgroundColor = new Color(0f, 0f, 0f, 0.65f);
+            _calibrationLabel.style.paddingLeft = 28;
+            _calibrationLabel.style.paddingRight = 28;
+            _calibrationLabel.style.paddingTop = 20;
+            _calibrationLabel.style.paddingBottom = 20;
+            _calibrationLabel.style.borderTopLeftRadius = 16;
+            _calibrationLabel.style.borderTopRightRadius = 16;
+            _calibrationLabel.style.borderBottomLeftRadius = 16;
+            _calibrationLabel.style.borderBottomRightRadius = 16;
+            root.Add(_calibrationLabel);
 
             _reticle = new VisualElement();
             _reticle.style.position = Position.Absolute;

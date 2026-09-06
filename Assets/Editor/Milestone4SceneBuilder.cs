@@ -65,22 +65,27 @@ namespace PocketBlaster.EditorTools
             light.intensity = 1.1f;
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
+            // オーナーからのプレイテストFB(2026-09-06)「敵が大きすぎて狙う要素が少ない。
+            // 遠くから小さいところから表示してほしい」を受けて、出現距離を離し
+            // スケールも控えめにした(以前はz=6-9・scale2-3.5)。接近してくる分の
+            // 移動時間が伸びるのでapproachSpeedも上げて、ウェーブの長さ自体は
+            // 極端に伸びないようにしてある。
             var wave1Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-2f, 1.6f, 8f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave1_Carrot_R", new Vector3(2f, 1.6f, 8f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-3f, 1.6f, 16f), tomatoSprite, TomatoJuice, 1.4f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave1_Carrot_R", new Vector3(3f, 1.6f, 16f), carrotSprite, CarrotJuice, 1.4f, respawns: false, approaches: true, approachSpeed: 1f),
             };
 
             var wave2Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave2_Tomato_L", new Vector3(-3f, 1.6f, 7f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 7.5f), onionSprite, OnionJuice, 2f, respawns: false, approaches: true),
-                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(3f, 1.6f, 7f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave2_Tomato_L", new Vector3(-4f, 1.6f, 15f), tomatoSprite, TomatoJuice, 1.4f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 15.5f), onionSprite, OnionJuice, 1.4f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(4f, 1.6f, 15f), carrotSprite, CarrotJuice, 1.4f, respawns: false, approaches: true, approachSpeed: 1f),
             };
 
             var wave3Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave3_PumpkinBoss", new Vector3(0f, 2f, 6f), pumpkinSprite, PumpkinJuice, 3.5f, respawns: false, approaches: true, approachSpeed: 0.4f),
+                EnemyFactory.CreateVegetableZombie("Wave3_PumpkinBoss", new Vector3(0f, 2f, 14f), pumpkinSprite, PumpkinJuice, 2.2f, respawns: false, approaches: true, approachSpeed: 0.6f),
             };
 
             var rigGo = new GameObject("GyroAimTestRig");
@@ -114,6 +119,7 @@ namespace PocketBlaster.EditorTools
             }
 
             EditorSceneManager.SaveScene(scene, ScenePath);
+            BuildSettingsHelper.EnsureSceneInBuildSettings(ScenePath);
             Debug.Log($"[Milestone4SceneBuilder] シーンを保存しました: {ScenePath}");
         }
 

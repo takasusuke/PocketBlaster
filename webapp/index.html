@@ -34,6 +34,9 @@
   #shootBtn:disabled { background: #333; color: #888; }
   #reloadBtn { background: #FF7A45; color: white; }
   #reloadBtn:disabled { background: #333; color: #888; }
+  #subControls { display: flex; gap: 12px; width: 100%; max-width: 360px; }
+  #pauseBtn, #retryBtn { background: #2A2A38; color: #ddd; font-size: 15px; padding: 12px; }
+  #pauseBtn:disabled, #retryBtn:disabled { background: #222; color: #666; }
   #raw { font-size: 12px; color: #888; }
   #stepStatus { font-size: 13px; color: #aaa; }
   #axisSettings {
@@ -94,6 +97,10 @@
   <button id="connectBtn">接続する</button>
   <button id="shootBtn" disabled>撃つ</button>
   <button id="reloadBtn" disabled>リロード（弾を補充し、狙いを基準位置にリセット）</button>
+  <div id="subControls">
+    <button id="pauseBtn" disabled>一時停止</button>
+    <button id="retryBtn" disabled>再挑戦</button>
+  </div>
   <div id="raw"></div>
   <div id="stepStatus">歩数: <span id="stepCount">0</span>（狙っている方向へ移動）</div>
 </div>
@@ -103,6 +110,8 @@
   var connectBtn = document.getElementById('connectBtn');
   var shootBtn = document.getElementById('shootBtn');
   var reloadBtn = document.getElementById('reloadBtn');
+  var pauseBtn = document.getElementById('pauseBtn');
+  var retryBtn = document.getElementById('retryBtn');
   var rawEl = document.getElementById('raw');
   var stepCountEl = document.getElementById('stepCount');
   var verticalAxisSelect = document.getElementById('verticalAxisSelect');
@@ -172,6 +181,8 @@
       setStatus('接続済み\n' + url, 'connected');
       shootBtn.disabled = false;
       reloadBtn.disabled = false;
+      pauseBtn.disabled = false;
+      retryBtn.disabled = false;
       var selectedMode = document.querySelector('input[name="mode"]:checked');
       ws.send(JSON.stringify({ type: 'mode', mode: selectedMode ? selectedMode.value : 'casual' }));
     };
@@ -179,6 +190,8 @@
       setStatus('切断されました。もう一度「接続する」を押してください', 'error');
       shootBtn.disabled = true;
       reloadBtn.disabled = true;
+      pauseBtn.disabled = true;
+      retryBtn.disabled = true;
     };
     ws.onerror = function () {
       setStatus('接続エラー。PCと同じWi-Fiに接続しているか確認してください', 'error');
@@ -348,6 +361,17 @@
 
   reloadBtn.addEventListener('click', function () {
     sendMessage('reload');
+  });
+
+  pauseBtn.addEventListener('click', function () {
+    sendMessage('pause');
+  });
+
+  // 再挑戦はUnity側でシーンを丸ごとリロードする(GameSession参照)。シーン内の
+  // サーバーごと作り直されるためこのWebSocket接続も切れる — 再接続が必要になる
+  // (未検証・実機確認待ち、docs/HANDOFF.md参照)。
+  retryBtn.addEventListener('click', function () {
+    sendMessage('retry');
   });
 })();
 </script>
