@@ -1,5 +1,6 @@
 using PocketBlaster.Aim;
 using PocketBlaster.Networking;
+using PocketBlaster.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -159,6 +160,7 @@ namespace PocketBlaster.Gameplay
             _sessionLabel.style.left = 12;
             _sessionLabel.style.color = Color.white;
             _sessionLabel.style.fontSize = 18;
+            RuntimeLabelStyle.ApplyDefaultFont(_sessionLabel);
             _uiDocument.rootVisualElement.Add(_sessionLabel);
 
             _pauseLabel = new Label("一時停止中");
@@ -178,6 +180,7 @@ namespace PocketBlaster.Gameplay
             _pauseLabel.style.borderTopRightRadius = 12;
             _pauseLabel.style.borderBottomLeftRadius = 12;
             _pauseLabel.style.borderBottomRightRadius = 12;
+            RuntimeLabelStyle.ApplyDefaultFont(_pauseLabel);
             _uiDocument.rootVisualElement.Add(_pauseLabel);
         }
     }

@@ -3,6 +3,7 @@ using System.Collections;
 using PocketBlaster.Audio;
 using PocketBlaster.Gameplay;
 using PocketBlaster.Networking;
+using PocketBlaster.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -44,6 +45,16 @@ namespace PocketBlaster.Aim
         [SerializeField] private Camera aimCamera;
         [SerializeField] private LayerMask hitLayerMask = ~0;
         [SerializeField] private float maxHitDistance = 1000f;
+
+        /// <summary>
+        /// PC上でマウスでも狙えるようにする(オーナー要望、2026-09-06:「あくまでデバッグを
+        /// 容易にするため」)。実機(スマホ)が無くてもPlay Modeだけで狙撃・命中判定を
+        /// 試せるようにする、開発用の割り切り。有効な間はマウス座標が常にジャイロより
+        /// 優先する(ジャイロの計算自体は止めない — 実機を同時につないでいる場合の
+        /// デバッグ表示はそのまま見える)。実機での本番テストで邪魔になる場合は
+        /// Inspectorでオフにする。
+        /// </summary>
+        [SerializeField] private bool enableMouseDebugAim = true;
 
         /// <summary>
         /// 狙って撃った結果(true=命中、false=はずれ)。難易度モード(GameSession)が
@@ -142,15 +153,31 @@ namespace PocketBlaster.Aim
             _offsetX = gammaDelta * degreesToScreenPixels;
             _offsetY = betaDelta * degreesToScreenPixels;
 
-            var halfW = Screen.width / 2f;
-            var halfH = Screen.height / 2f;
-            var x = Mathf.Clamp(halfW + _offsetX, 0, Screen.width);
-            var y = Mathf.Clamp(halfH + _offsetY, 0, Screen.height);
+            float x, y;
+            if (enableMouseDebugAim)
+            {
+                // UI Toolkitは左上原点・下方向がプラスだが、Input.mousePositionは
+                // 左下原点・上方向がプラスなのでYを反転する。
+                x = Mathf.Clamp(Input.mousePosition.x, 0, Screen.width);
+                y = Mathf.Clamp(Screen.height - Input.mousePosition.y, 0, Screen.height);
+            }
+            else
+            {
+                var halfW = Screen.width / 2f;
+                var halfH = Screen.height / 2f;
+                x = Mathf.Clamp(halfW + _offsetX, 0, Screen.width);
+                y = Mathf.Clamp(halfH + _offsetY, 0, Screen.height);
+            }
 
             _reticleScreenX = x;
             _reticleScreenY = y;
             _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
             _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
+
+            if (enableMouseDebugAim && Input.GetMouseButtonDown(0))
+            {
+                HandleShoot();
+            }
 
             var ammoLine = _isAutoReloading
                 ? "リロード中..."
@@ -311,6 +338,7 @@ namespace PocketBlaster.Aim
             _calibrationLabel.style.borderTopRightRadius = 16;
             _calibrationLabel.style.borderBottomLeftRadius = 16;
             _calibrationLabel.style.borderBottomRightRadius = 16;
+            RuntimeLabelStyle.ApplyDefaultFont(_calibrationLabel);
             root.Add(_calibrationLabel);
 
             _reticle = new VisualElement();
@@ -339,6 +367,7 @@ namespace PocketBlaster.Aim
             _statusLabel.style.color = Color.white;
             _statusLabel.style.fontSize = 18;
             _statusLabel.style.whiteSpace = WhiteSpace.Normal;
+            RuntimeLabelStyle.ApplyDefaultFont(_statusLabel);
             root.Add(_statusLabel);
 
             // 残弾は上のstatusLabel内にも既に出ているが、デバッグ情報に埋もれて
@@ -361,6 +390,7 @@ namespace PocketBlaster.Aim
             _ammoLabel.style.borderTopRightRadius = 12;
             _ammoLabel.style.borderBottomLeftRadius = 12;
             _ammoLabel.style.borderBottomRightRadius = 12;
+            RuntimeLabelStyle.ApplyDefaultFont(_ammoLabel);
             root.Add(_ammoLabel);
         }
     }

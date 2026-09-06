@@ -37,6 +37,33 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
   `ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear)`で明示的に止めてから
   設定し、最後に`ps.Play()`で改めて再生する形に修正した。
 
+## HUDのテキストが一切描画されない不具合の修正（2026-09-06、実機確認済み）
+
+オーナーがゲーム終了画面のスクリーンショットを送ってくれたことで判明: レティクル(枠線だけの
+VisualElement)は正しく描画されているのに、スコア・ウェーブ・残機等の**Labelのテキストが
+画面上に一切表示されていなかった**。ラベルの中央寄せ計算(前回の修正)の問題ではなく、
+もっと根本的な原因だった。
+
+- **原因**: `ScriptableObject.CreateInstance<PanelSettings>()`で実行時生成した
+  PanelSettingsには、エディタの「Create > UI Toolkit > Panel Settings Asset」経由と違い
+  既定のThemeStyleSheetが付与されない。その結果`Label`がフォントを解決できず、
+  テキストのレイアウト・描画自体が行われない(枠線やbackgroundColorはテーマ非依存なので
+  正常に描画される — これが「レティクルは見えるのにテキストだけ見えない」という
+  観測と一致する)。
+- **調査で判明した副次情報**: Unity 6では`Resources.GetBuiltinResource<Font>("Arial.ttf")`が
+  `ArgumentException`を投げるようになっている（"Arial.ttf is no longer a valid built in
+  font. Please use LegacyRuntime.ttf"）。バッチモードでの実機確認で判明（診断用に
+  一時的なEditorスクリプトを書いて`-executeMethod`で実行、確認後に削除した）。
+- **修正**: 共通ヘルパー`Assets/Scripts/UI/RuntimeLabelStyle.cs`を新規作成し、
+  `Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")`を`Label.style
+  .unityFontDefinition`に明示指定する`ApplyDefaultFont(Label)`を用意。
+  `GyroReticleController`・`StageDirector`・`GameSession`が生成する全8個のLabel
+  （キャリブレーション案内・ステータス・残弾・ウェーブ・スコア・セッション・一時停止）
+  すべてに適用した。
+  **実機確認済み**: `LegacyRuntime.ttf`が`null`にならず解決できることをバッチモードで
+  直接確認した（実際にPlay Modeでテキストが表示されるかどうかの最終確認はオーナーに
+  お願いしたい）。
+
 ## HUD表示・自動リロード・敵接近の開始タイミング対応（2026-09-06、実装済み・未検証）
 
 オーナーからの追加プレイテストFB3件に対応。
@@ -65,6 +92,19 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
    `autoReloadDelaySeconds`は今は単なる待ち時間だが、後で差し替える
    リロードアニメーションの尺として使う想定の置き場所（オーナー要望
    「のちのちリロードのアニメーションは発生させる」）。
+
+## PC上のマウスでの狙い（デバッグ用、2026-09-06、実装済み・未検証）
+
+「遊び方の部分はだいたい良いので、UIや設定や演出や拡張をすすめていきましょう。まず、PC上の
+クリックでもカーソルを動かせるようにしてください。この機能はあくまでデバッグを容易にする
+ためです」（オーナー要望）。`GyroReticleController`に`enableMouseDebugAim`（既定true）を
+追加し、有効な間は常に`Input.mousePosition`がジャイロより優先してレティクル位置を決める。
+左クリックで`HandleShoot()`を直接呼ぶ（弾数・命中判定・効果音は通常の射撃と完全に共通）。
+スマホの実機テストで邪魔になる場合はInspectorでオフにする。
+
+スコープ外（今回は対応していない）: マウスは狙い/発射のみに対応しており、キャリブレーション
+（接続後のリロード操作）自体はスマホ経由のままなので、実機を一切使わない完全なフォンフリーの
+デバッグはまだできない。必要なら別途対応する。
 
 ## 敵の接近開始タイミング（2026-09-06、実装済み・未検証）
 

@@ -1,4 +1,5 @@
 using System.Collections;
+using PocketBlaster.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -197,6 +198,7 @@ namespace PocketBlaster.Gameplay
             _waveLabel.style.color = Color.white;
             _waveLabel.style.fontSize = 20;
             _waveLabel.style.unityTextAlign = TextAnchor.UpperRight;
+            RuntimeLabelStyle.ApplyDefaultFont(_waveLabel);
             _uiDocument.rootVisualElement.Add(_waveLabel);
 
             // スコアは狙っている最中も視界の端で常に見えるように、画面上部中央へ
@@ -214,6 +216,7 @@ namespace PocketBlaster.Gameplay
             _scoreLabel.style.fontSize = 32;
             _scoreLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
             _scoreLabel.style.unityTextAlign = TextAnchor.UpperCenter;
+            RuntimeLabelStyle.ApplyDefaultFont(_scoreLabel);
             _uiDocument.rootVisualElement.Add(_scoreLabel);
         }
 
