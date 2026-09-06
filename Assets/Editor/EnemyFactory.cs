@@ -12,7 +12,8 @@ namespace PocketBlaster.EditorTools
     public static class EnemyFactory
     {
         public static Target CreateVegetableZombie(
-            string name, Vector3 position, Sprite sprite, Color juiceColor, float scale, bool respawns)
+            string name, Vector3 position, Sprite sprite, Color juiceColor, float scale, bool respawns,
+            bool approaches = false, float approachSpeed = 0.6f, float damageRange = 1.5f)
         {
             var root = new GameObject(name);
             root.transform.position = position;
@@ -34,6 +35,17 @@ namespace PocketBlaster.EditorTools
             so.FindProperty("respawnsAfterDefeat").boolValue = respawns;
             so.FindProperty("juiceColor").colorValue = juiceColor;
             so.ApplyModifiedPropertiesWithoutUndo();
+
+            // 固定的な仮の敵(Milestone3)には付けない。ウェーブ制のステージだけ
+            // 「近づいてくる」動きを持たせる(オーナー要望、2026-09-06)。
+            if (approaches)
+            {
+                var approach = root.AddComponent<EnemyApproach>();
+                var approachSo = new SerializedObject(approach);
+                approachSo.FindProperty("approachSpeed").floatValue = approachSpeed;
+                approachSo.FindProperty("damageRange").floatValue = damageRange;
+                approachSo.ApplyModifiedPropertiesWithoutUndo();
+            }
 
             return target;
         }

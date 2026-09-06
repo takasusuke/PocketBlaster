@@ -67,20 +67,20 @@ namespace PocketBlaster.EditorTools
 
             var wave1Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-2f, 1.6f, 8f), tomatoSprite, TomatoJuice, 2f, respawns: false),
-                EnemyFactory.CreateVegetableZombie("Wave1_Carrot_R", new Vector3(2f, 1.6f, 8f), carrotSprite, CarrotJuice, 2f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-2f, 1.6f, 8f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave1_Carrot_R", new Vector3(2f, 1.6f, 8f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
             };
 
             var wave2Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave2_Tomato_L", new Vector3(-3f, 1.6f, 7f), tomatoSprite, TomatoJuice, 2f, respawns: false),
-                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 7.5f), onionSprite, OnionJuice, 2f, respawns: false),
-                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(3f, 1.6f, 7f), carrotSprite, CarrotJuice, 2f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave2_Tomato_L", new Vector3(-3f, 1.6f, 7f), tomatoSprite, TomatoJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 7.5f), onionSprite, OnionJuice, 2f, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(3f, 1.6f, 7f), carrotSprite, CarrotJuice, 2f, respawns: false, approaches: true),
             };
 
             var wave3Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave3_PumpkinBoss", new Vector3(0f, 2f, 6f), pumpkinSprite, PumpkinJuice, 3.5f, respawns: false),
+                EnemyFactory.CreateVegetableZombie("Wave3_PumpkinBoss", new Vector3(0f, 2f, 6f), pumpkinSprite, PumpkinJuice, 3.5f, respawns: false, approaches: true, approachSpeed: 0.4f),
             };
 
             var rigGo = new GameObject("GyroAimTestRig");

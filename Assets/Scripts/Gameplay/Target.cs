@@ -47,6 +47,8 @@ namespace PocketBlaster.Gameplay
         private bool _hasFiredDefeated;
 
         public bool IsHittable => _state.IsHittable;
+        /// <summary>Defeated(退場確定)でなければtrue。EnemyApproachが「まだ動かしてよいか」を見るのに使う。</summary>
+        public bool IsAlive => _state.CurrentPhase != TargetHitState.Phase.Defeated;
 
         private void Awake()
         {

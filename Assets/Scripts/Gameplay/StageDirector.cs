@@ -23,6 +23,10 @@ namespace PocketBlaster.Gameplay
     /// 全部購読しているのでここに乗せている(Target.PointValueの合計、ScoreState参照)。
     /// ハイスコアはシーン名ごとにPlayerPrefsへ保存する(ステージをまたいだ通算スコアでは
     /// なく、ステージ単体のベスト記録)。
+    ///
+    /// 敵がプレイヤーに近づき過ぎて退場した場合(EnemyApproach.OnReachedPlayer)も、
+    /// 撃って倒した場合と同様にウェーブの残り数からは減らすが、加点はしない。
+    /// OnEnemyReachedPlayerでGameSessionへ中継し、難易度モードの残機減少に使う。
     /// </summary>
     public class StageDirector : MonoBehaviour
     {
@@ -37,6 +41,12 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Transform moveTarget;
         [SerializeField] private Wave[] waves;
         [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
+
+        /// <summary>
+        /// 敵がプレイヤーに近づき過ぎて退場した(EnemyApproach.OnReachedPlayer)瞬間に
+        /// 中継される。GameSessionが難易度モード(アーケード)の残機減少に使う。
+        /// </summary>
+        public event System.Action OnEnemyReachedPlayer;
 
         private StageProgressState _progress;
         private ScoreState _score;
@@ -81,6 +91,8 @@ namespace PocketBlaster.Gameplay
             {
                 enemy.gameObject.SetActive(true);
                 enemy.OnDefeated += HandleEnemyDefeated;
+                var approach = enemy.GetComponent<EnemyApproach>();
+                if (approach != null) approach.OnReachedPlayer += HandleEnemyReachedPlayer;
             }
 
             UpdateWaveLabel();
@@ -95,7 +107,18 @@ namespace PocketBlaster.Gameplay
         private void HandleEnemyDefeated(Target defeatedTarget)
         {
             _score.AddPoints(defeatedTarget.PointValue);
+            AdvanceWaveState();
+        }
 
+        /// <summary>敵が近づき過ぎてプレイヤーに到達した場合。撃って倒したのではないので加点はしない。</summary>
+        private void HandleEnemyReachedPlayer(Target reachedTarget)
+        {
+            OnEnemyReachedPlayer?.Invoke();
+            AdvanceWaveState();
+        }
+
+        private void AdvanceWaveState()
+        {
             var wave = waves[_progress.CurrentWaveIndex];
             var waveCleared = _progress.NotifyEnemyDefeated();
             UpdateWaveLabel();
@@ -105,6 +128,8 @@ namespace PocketBlaster.Gameplay
                 foreach (var enemy in wave.enemies)
                 {
                     enemy.OnDefeated -= HandleEnemyDefeated;
+                    var approach = enemy.GetComponent<EnemyApproach>();
+                    if (approach != null) approach.OnReachedPlayer -= HandleEnemyReachedPlayer;
                 }
                 StartNextWave();
             }
