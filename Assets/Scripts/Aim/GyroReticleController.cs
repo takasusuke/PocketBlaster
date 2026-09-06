@@ -412,43 +412,18 @@ namespace PocketBlaster.Aim
                 return false;
             }
 
-            var ray = aimRay.Value;
-
-            // ヘッドショット判定(オーナー要望、2026-09-06:「反動コントロール要素として、
-            // 敵のヘッドショットなど部位別のダメージ量変化」)。頭部コライダー(HeadHitbox)
-            // は本体コライダーと奥行きがほぼ同じで前後関係が不安定なため、RaycastAllで
-            // 視線上の全ヒットを見て、頭部が含まれていれば距離に関わらず優先する。
-            var hits = Physics.RaycastAll(ray, maxHitDistance, hitLayerMask);
-            // RaycastAllは順序を保証しないため、距離順に並べてから見る
-            // (複数の敵が視線上に重なっている場合に手前を優先するため)。
-            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
-
-            foreach (var candidate in hits)
+            // 判定そのものはAimHitResolverへ委譲する(2026-09-07、マルチプレイヤーモード
+            // 追加に伴い、MultiplayerAimControllerと共有するために切り出した。振る舞いは
+            // 変えていない——効果音の再生だけこちら側の責務として残す)。
+            var result = AimHitResolver.TryHit(aimRay.Value, maxHitDistance, hitLayerMask);
+            if (result == AimHitResolver.Result.Miss)
             {
-                var headHitbox = candidate.collider.GetComponent<HeadHitbox>();
-                if (headHitbox != null && headHitbox.Target != null && headHitbox.Target.IsHittable)
-                {
-                    headHitbox.Target.TakeHeadshot();
-                    _audioSource.PlayOneShot(_hitClip);
-                    return true;
-                }
+                _audioSource.PlayOneShot(_missClip);
+                return false;
             }
 
-            // TargetとPickupはどちらもIShootable(共通の狙撃対象契約、IShootable.cs参照)
-            // なので、ここでは種類を区別せず同じ判定にまとめている。
-            foreach (var candidate in hits)
-            {
-                var shootable = candidate.collider.GetComponentInParent<IShootable>();
-                if (shootable != null && shootable.IsHittable)
-                {
-                    shootable.TakeHit();
-                    _audioSource.PlayOneShot(_hitClip);
-                    return true;
-                }
-            }
-
-            _audioSource.PlayOneShot(_missClip);
-            return false;
+            _audioSource.PlayOneShot(_hitClip);
+            return true;
         }
 
         /// <summary>
