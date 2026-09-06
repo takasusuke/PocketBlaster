@@ -145,6 +145,8 @@ namespace PocketBlaster.Gameplay
         private void BuildUi()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            // StageDirector.csと同じ理由でsortingOrderを明示する。
+            _panelSettings.sortingOrder = 5;
 
             var uiDocumentGo = new GameObject("GameSessionUI");
             uiDocumentGo.transform.SetParent(transform, false);

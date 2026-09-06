@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using PocketBlaster.Audio;
 using PocketBlaster.Gameplay;
 using PocketBlaster.Networking;
@@ -39,6 +40,7 @@ namespace PocketBlaster.Aim
     {
         [SerializeField] private float degreesToScreenPixels = 12f;
         [SerializeField] private int magazineSize = 6;
+        [SerializeField] private float autoReloadDelaySeconds = 0.6f;
         [SerializeField] private Camera aimCamera;
         [SerializeField] private LayerMask hitLayerMask = ~0;
         [SerializeField] private float maxHitDistance = 1000f;
@@ -49,6 +51,13 @@ namespace PocketBlaster.Aim
         /// (狙いの結果ではなく弾数の運用ミスなので、残機には数えない設計)。
         /// </summary>
         public event Action<bool> OnShotResolved;
+
+        /// <summary>
+        /// キャリブレーション(初回接続後の「リロード」操作)が完了しているか。
+        /// EnemyApproachが「スマホが接続してアクションを取るまで敵を近づかせない」
+        /// (オーナー要望、2026-09-06)ために参照する。
+        /// </summary>
+        public bool IsCalibrated => _isCalibrated;
 
         private PhoneControllerServer _server;
         private AmmoState _ammo;
@@ -62,8 +71,10 @@ namespace PocketBlaster.Aim
         private VisualElement _reticle;
         private Label _statusLabel;
         private Label _calibrationLabel;
+        private Label _ammoLabel;
 
         private bool _isCalibrated;
+        private bool _isAutoReloading;
         private float _refBeta;
         private float _refGamma;
         private float _offsetX;
@@ -110,12 +121,14 @@ namespace PocketBlaster.Aim
                 _calibrationLabel.style.display = _server.IsConnected ? DisplayStyle.Flex : DisplayStyle.None;
                 _reticle.style.display = DisplayStyle.None;
                 _statusLabel.style.display = DisplayStyle.None;
+                _ammoLabel.style.display = DisplayStyle.None;
                 return;
             }
 
             _calibrationLabel.style.display = DisplayStyle.None;
             _reticle.style.display = DisplayStyle.Flex;
             _statusLabel.style.display = DisplayStyle.Flex;
+            _ammoLabel.style.display = DisplayStyle.Flex;
 
             _timeSinceReload += Time.deltaTime;
             if (_emptyClickFlashTimer > 0f) _emptyClickFlashTimer -= Time.deltaTime;
@@ -139,13 +152,25 @@ namespace PocketBlaster.Aim
             _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
             _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
 
-            var ammoLine = _ammo.CurrentAmmo > 0
-                ? $"弾: {_ammo.CurrentAmmo}/{_ammo.MagazineSize}"
-                : "弾切れ！リロードしてください";
+            var ammoLine = _isAutoReloading
+                ? "リロード中..."
+                : _ammo.CurrentAmmo > 0
+                    ? $"弾: {_ammo.CurrentAmmo}/{_ammo.MagazineSize}"
+                    : "弾切れ！リロードしてください";
             if (_emptyClickFlashTimer > 0f)
             {
                 ammoLine += "  (弾切れでの発射操作を無視しました)";
             }
+
+            // オーナーからのプレイテストFB(2026-09-06)「残り弾数をゲーム画面に表示して」を
+            // 受けて、上のammoLine(詳細デバッグ表示の一部)とは別に、見つけやすい大きな
+            // 専用表示を画面右下に出す。
+            _ammoLabel.text = _isAutoReloading
+                ? "リロード中..."
+                : $"残弾 {_ammo.CurrentAmmo} / {_ammo.MagazineSize}";
+            _ammoLabel.style.color = (_ammo.CurrentAmmo == 0 && !_isAutoReloading)
+                ? new Color(1f, 0.35f, 0.35f)
+                : Color.white;
 
             _statusLabel.text =
                 $"接続: {(_server.IsConnected ? "済" : "未接続")}  port {_server.Port}\n" +
@@ -160,6 +185,7 @@ namespace PocketBlaster.Aim
         private void HandleShoot()
         {
             if (!_isCalibrated) return; // キャリブレーション完了前は撃てない
+            if (_isAutoReloading) return; // 自動リロード中(のちのちここにリロードアニメーションが入る)
 
             if (!_ammo.Shoot())
             {
@@ -173,6 +199,29 @@ namespace PocketBlaster.Aim
             var didHit = TryHitTargetAtReticle();
             _lastShotResult = didHit ? "命中" : "はずれ";
             OnShotResolved?.Invoke(didHit);
+
+            if (_ammo.CurrentAmmo == 0)
+            {
+                StartCoroutine(AutoReloadRoutine());
+            }
+        }
+
+        /// <summary>
+        /// 残弾0で自動的にリロードする(オーナー要望、2026-09-06)。手動リロード
+        /// (HandleReload、"reload"メッセージ・フリックジェスチャー)とは異なり
+        /// <see cref="Recenter"/>は呼ばない — 弾切れになった瞬間にどこを狙っているかは
+        /// 不定なので、それを新しい基準にするとドリフト補正どころか逆にずれの原因になる。
+        /// 狙いの基準を取り直すのは、引き続き「画面中央に構え直してリロード操作をする」
+        /// 明示的な行動だけに限定する(../CLAUDE.md 設計上の不変条件2)。
+        /// autoReloadDelaySecondsは今は単なる待ち時間だが、後で差し替える
+        /// リロードアニメーションの尺として使う想定の置き場所。
+        /// </summary>
+        private IEnumerator AutoReloadRoutine()
+        {
+            _isAutoReloading = true;
+            yield return new WaitForSeconds(autoReloadDelaySeconds);
+            _ammo.Reload();
+            _isAutoReloading = false;
         }
 
         /// <summary>
@@ -235,6 +284,9 @@ namespace PocketBlaster.Aim
         private void BuildUi()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            // 他のUIDocument(StageDirector・GameSession)より確実に手前に出す
+            // (キャリブレーション画面やレティクルがHUDの下に隠れては困るため)。
+            _panelSettings.sortingOrder = 10;
 
             var uiDocumentGo = new GameObject("GyroReticleUI");
             uiDocumentGo.transform.SetParent(transform, false);
@@ -288,6 +340,28 @@ namespace PocketBlaster.Aim
             _statusLabel.style.fontSize = 18;
             _statusLabel.style.whiteSpace = WhiteSpace.Normal;
             root.Add(_statusLabel);
+
+            // 残弾は上のstatusLabel内にも既に出ているが、デバッグ情報に埋もれて
+            // 見つけにくいという指摘(オーナーからのプレイテストFB、2026-09-06)を受けて、
+            // 画面右下に大きく単独表示する。
+            _ammoLabel = new Label();
+            _ammoLabel.style.position = Position.Absolute;
+            _ammoLabel.style.bottom = 24;
+            _ammoLabel.style.right = 24;
+            _ammoLabel.style.color = Color.white;
+            _ammoLabel.style.fontSize = 36;
+            _ammoLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _ammoLabel.style.unityTextAlign = TextAnchor.MiddleRight;
+            _ammoLabel.style.backgroundColor = new Color(0f, 0f, 0f, 0.45f);
+            _ammoLabel.style.paddingLeft = 18;
+            _ammoLabel.style.paddingRight = 18;
+            _ammoLabel.style.paddingTop = 8;
+            _ammoLabel.style.paddingBottom = 8;
+            _ammoLabel.style.borderTopLeftRadius = 12;
+            _ammoLabel.style.borderTopRightRadius = 12;
+            _ammoLabel.style.borderBottomLeftRadius = 12;
+            _ammoLabel.style.borderBottomRightRadius = 12;
+            root.Add(_ammoLabel);
         }
     }
 }

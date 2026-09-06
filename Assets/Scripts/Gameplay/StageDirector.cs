@@ -179,6 +179,11 @@ namespace PocketBlaster.Gameplay
         private void BuildUi()
         {
             _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            // 複数のUIDocument(GyroReticleController・GameSession・ここ)がそれぞれ別の
+            // PanelSettingsを実行時生成しているため、既定値(全て0)のままだと重なり順が
+            // 不定になりうる。明示的に振っておく(レティクル/キャリブレーション画面が
+            // 常に最前面、HUD系はその下)。
+            _panelSettings.sortingOrder = 5;
 
             var uiDocumentGo = new GameObject("StageDirectorUI");
             uiDocumentGo.transform.SetParent(transform, false);
@@ -197,11 +202,14 @@ namespace PocketBlaster.Gameplay
             // スコアは狙っている最中も視界の端で常に見えるように、画面上部中央へ
             // 大きく単独表示する(オーナーからのプレイテストFB、2026-09-06:
             // 「スコア表示はゲーム画面のほうに出してください」)。
+            // 中央寄せはpercent+translateではなく、left/rightを両方0にして幅いっぱいに
+            // 広げてからunityTextAlignで中央寄せする(layout確定前のtranslate%計算に
+            // 依存しない、より確実な方法)。
             _scoreLabel = new Label();
             _scoreLabel.style.position = Position.Absolute;
             _scoreLabel.style.top = 12;
-            _scoreLabel.style.left = Length.Percent(50);
-            _scoreLabel.style.translate = new Translate(Length.Percent(-50), 0);
+            _scoreLabel.style.left = 0;
+            _scoreLabel.style.right = 0;
             _scoreLabel.style.color = Color.white;
             _scoreLabel.style.fontSize = 32;
             _scoreLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
