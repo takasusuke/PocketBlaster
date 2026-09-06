@@ -1,4 +1,6 @@
 using System.Collections;
+using PocketBlaster.Aim;
+using PocketBlaster.Meta;
 using PocketBlaster.UI;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -42,12 +44,21 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Transform moveTarget;
         [SerializeField] private Wave[] waves;
         [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
+        [SerializeField] private GyroReticleController reticleController;
+        [SerializeField, Range(0f, 1f)] private float pickupSpawnChance = 0.5f;
 
         /// <summary>
         /// 敵がプレイヤーに近づき過ぎて退場した(EnemyApproach.OnReachedPlayer)瞬間に
         /// 中継される。GameSessionが難易度モード(アーケード)の残機減少に使う。
         /// </summary>
         public event System.Action OnEnemyReachedPlayer;
+
+        /// <summary>
+        /// 体力回復アイテムを取得した瞬間に中継される(オーナー要望、2026-09-06:
+        /// 「撃つとプレイヤーの体力を回復するアイテム」)。GameSessionが残機回復に使う
+        /// (このゲームは連続値のHPではなく残機制のため、「回復」は「残機を1つ戻す」ことにした)。
+        /// </summary>
+        public event System.Action OnHealthPickupCollected;
 
         private StageProgressState _progress;
         private ScoreState _score;
@@ -58,11 +69,13 @@ namespace PocketBlaster.Gameplay
         private Label _waveLabel;
         private Label _scoreLabel;
         private Label _gradeLabel;
+        private Pickup _currentPickup;
 
         private void Awake()
         {
             if (stageCamera == null) stageCamera = Camera.main;
             if (moveTarget == null) moveTarget = stageCamera.transform;
+            if (reticleController == null) reticleController = FindFirstObjectByType<GyroReticleController>();
 
             _score = new ScoreState();
             _highScorePrefsKey = $"PocketBlaster.HighScore.{gameObject.scene.name}";
@@ -101,12 +114,71 @@ namespace PocketBlaster.Gameplay
             }
 
             UpdateWaveLabel();
+            MaybeSpawnPickup(wave);
 
             if (wave.cameraWaypoint != null)
             {
                 StopAllCoroutines();
                 StartCoroutine(MoveCameraTo(wave.cameraWaypoint.position, wave.cameraWaypoint.rotation));
             }
+        }
+
+        /// <summary>
+        /// ウェーブ開始時に一定確率でアイテムを1個出現させる(オーナー要望、2026-09-06:
+        /// 「マップ内にランダムに配置されたり出現されるようにしてください」)。ウェーブの
+        /// カメラ位置より手前・やや近い距離に出す(遠くの敵より狙いやすくして、
+        /// 「敵を優先するか、アイテムを取りに行くか」の選択を生む)。
+        /// </summary>
+        private void MaybeSpawnPickup(Wave wave)
+        {
+            if (Random.value > pickupSpawnChance) return;
+
+            var origin = wave.cameraWaypoint != null ? wave.cameraWaypoint : moveTarget;
+            var depth = Random.Range(8f, 14f);
+            var xOffset = Random.Range(-4f, 4f);
+            var position = origin.position + origin.forward * depth + Vector3.right * xOffset;
+            position.y = 1.6f;
+
+            _currentPickup = PickupFactory.Create(ChooseRandomPickupType(), position);
+            _currentPickup.OnConsumed += HandlePickupConsumed;
+        }
+
+        private static PickupType ChooseRandomPickupType()
+        {
+            // カジュアルモードには残機の概念が無いため、体力回復アイテムは
+            // アーケードモードの時だけ候補に入れる。
+            var options = GameSettings.Current.IsArcadeMode
+                ? new[] { PickupType.Health, PickupType.Reload, PickupType.AmmoUp }
+                : new[] { PickupType.Reload, PickupType.AmmoUp };
+            return options[Random.Range(0, options.Length)];
+        }
+
+        private void HandlePickupConsumed(Pickup pickup)
+        {
+            pickup.OnConsumed -= HandlePickupConsumed;
+            if (_currentPickup == pickup) _currentPickup = null;
+
+            switch (pickup.Type)
+            {
+                case PickupType.Health:
+                    OnHealthPickupCollected?.Invoke();
+                    break;
+                case PickupType.Reload:
+                    if (reticleController != null) reticleController.ApplyReloadPickup();
+                    break;
+                case PickupType.AmmoUp:
+                    if (reticleController != null) reticleController.ApplyAmmoUpPickup(2);
+                    break;
+            }
+        }
+
+        /// <summary>ウェーブが切り替わる時、取り残されたアイテムは片付ける。</summary>
+        private void ClearCurrentPickup()
+        {
+            if (_currentPickup == null) return;
+            _currentPickup.OnConsumed -= HandlePickupConsumed;
+            Destroy(_currentPickup.gameObject);
+            _currentPickup = null;
         }
 
         private void HandleEnemyDefeated(Target defeatedTarget)
@@ -139,6 +211,7 @@ namespace PocketBlaster.Gameplay
                     var approach = enemy.GetComponent<EnemyApproach>();
                     if (approach != null) approach.OnReachedPlayer -= HandleEnemyReachedPlayer;
                 }
+                ClearCurrentPickup();
                 StartNextWave();
             }
         }

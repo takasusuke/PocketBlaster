@@ -14,7 +14,7 @@ namespace PocketBlaster.Gameplay
     /// 子オブジェクト(Visual)側にSpriteRendererと倒れ込みを持たせ、ルート側はBillboardと
     /// コライダーだけを持つ。
     /// </summary>
-    public class Target : MonoBehaviour
+    public class Target : MonoBehaviour, IShootable
     {
         [SerializeField] private Transform visualTransform;
         [SerializeField] private float flashDurationSeconds = 0.08f;

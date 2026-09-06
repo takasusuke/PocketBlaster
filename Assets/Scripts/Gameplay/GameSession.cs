@@ -66,7 +66,11 @@ namespace PocketBlaster.Gameplay
             _server.OnPauseToggleRequested += HandlePauseToggleRequested;
             _server.OnRetryRequested += HandleRetryRequested;
             if (reticleController != null) reticleController.OnShotResolved += HandleShotResolved;
-            if (stageDirector != null) stageDirector.OnEnemyReachedPlayer += HandleEnemyReachedPlayer;
+            if (stageDirector != null)
+            {
+                stageDirector.OnEnemyReachedPlayer += HandleEnemyReachedPlayer;
+                stageDirector.OnHealthPickupCollected += HandleHealthPickupCollected;
+            }
 
             BuildUi();
             UpdateLabel();
@@ -80,7 +84,11 @@ namespace PocketBlaster.Gameplay
                 _server.OnRetryRequested -= HandleRetryRequested;
             }
             if (reticleController != null) reticleController.OnShotResolved -= HandleShotResolved;
-            if (stageDirector != null) stageDirector.OnEnemyReachedPlayer -= HandleEnemyReachedPlayer;
+            if (stageDirector != null)
+            {
+                stageDirector.OnEnemyReachedPlayer -= HandleEnemyReachedPlayer;
+                stageDirector.OnHealthPickupCollected -= HandleHealthPickupCollected;
+            }
             if (_panelSettings != null) Destroy(_panelSettings);
 
             // このGameObjectが破棄される時(シーン遷移等)にtimeScaleが0のまま
@@ -113,6 +121,18 @@ namespace PocketBlaster.Gameplay
         private void HandleEnemyReachedPlayer()
         {
             LoseLifeIfArcade("敵の接近");
+        }
+
+        /// <summary>
+        /// 体力回復アイテム(オーナー要望、2026-09-06)。カジュアルモードには残機の
+        /// 概念が無いので何もしない(StageDirector側でもカジュアルモードでは
+        /// このアイテム自体を出現候補から除外している)。
+        /// </summary>
+        private void HandleHealthPickupCollected()
+        {
+            if (_mode != Mode.Arcade || _isGameOver) return;
+            _lives.RestoreLife();
+            UpdateLabel();
         }
 
         private void LoseLifeIfArcade(string reason)

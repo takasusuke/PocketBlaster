@@ -9,7 +9,7 @@ namespace PocketBlaster.Aim
     /// </summary>
     public class AmmoState
     {
-        public int MagazineSize { get; }
+        public int MagazineSize { get; private set; }
         public int CurrentAmmo { get; private set; }
         public bool CanShoot => CurrentAmmo > 0;
 
@@ -30,6 +30,17 @@ namespace PocketBlaster.Aim
         public void Reload()
         {
             CurrentAmmo = MagazineSize;
+        }
+
+        /// <summary>
+        /// 最大弾薬数を増やす(オーナー要望、2026-09-06:「最大弾薬数を増加させる
+        /// アイテム」)。取得した分だけ即座に使える弾も増える(補充ではなく純粋な増量)。
+        /// </summary>
+        public void IncreaseMagazineSize(int amount)
+        {
+            if (amount <= 0) return;
+            MagazineSize += amount;
+            CurrentAmmo += amount;
         }
     }
 }

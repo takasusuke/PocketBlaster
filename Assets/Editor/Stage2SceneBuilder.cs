@@ -10,9 +10,10 @@ namespace PocketBlaster.EditorTools
     /// <summary>
     /// docs/requirements.md §8「将来の拡張」のうち「複数ステージ・ボス戦」を実現する
     /// 2本目のステージ。Milestone4_Stageと同じ4種のスプライトを再利用しつつ、
-    /// ウェーブを1つ増やし(4ウェーブ)、最後をパンプキンボスの多段ヒット(3発、
-    /// respawns:falseと組み合わせて「3発当てるまで倒れない」ボス戦にする、
-    /// TargetHitState/Target参照)にしてある。
+    /// 6ウェーブ(2026-09-06、オーナー要望「1ラウンドの長さや敵の出現頻度を多く、
+    /// 長くしてください」を受けて4→6ウェーブに拡張)、最後をパンプキンボスの
+    /// 多段ヒット(3発、respawns:falseと組み合わせて「3発当てるまで倒れない」ボス戦に
+    /// する、TargetHitState/Target参照)にしてある。
     ///
     /// 意図的に別シーンとして独立させ、Milestone1/3/4と同じく単独でPlay Modeに入って
     /// 試せるようにしてある(ステージ1からの自動遷移は実装していない — 各シーンが
@@ -45,14 +46,16 @@ namespace PocketBlaster.EditorTools
             var onionSprite = EnemyFactory.LoadSpriteOrPlaceholder(OnionSpritePath);
             var pumpkinSprite = EnemyFactory.LoadSpriteOrPlaceholder(PumpkinBossSpritePath);
 
-            var wave1Waypoint = CreateWaypoint("Waypoint_Wave1", new Vector3(0f, 1.6f, 0f));
-            var wave2Waypoint = CreateWaypoint("Waypoint_Wave2", new Vector3(0f, 1.6f, 1f));
-            var wave3Waypoint = CreateWaypoint("Waypoint_Wave3", new Vector3(0f, 1.6f, 2f));
-            var wave4Waypoint = CreateWaypoint("Waypoint_Wave4_Boss", new Vector3(0f, 1.6f, 3f));
+            var waveWaypoints = new Transform[6];
+            for (var i = 0; i < waveWaypoints.Length; i++)
+            {
+                var name = i == waveWaypoints.Length - 1 ? $"Waypoint_Wave{i + 1}_Boss" : $"Waypoint_Wave{i + 1}";
+                waveWaypoints[i] = CreateWaypoint(name, new Vector3(0f, 1.6f, i));
+            }
 
             var playerRigGo = new GameObject("PlayerRig");
-            playerRigGo.transform.position = wave1Waypoint.position;
-            playerRigGo.transform.rotation = wave1Waypoint.rotation;
+            playerRigGo.transform.position = waveWaypoints[0].position;
+            playerRigGo.transform.rotation = waveWaypoints[0].rotation;
 
             var cameraGo = new GameObject("Main Camera");
             cameraGo.tag = "MainCamera";
@@ -68,38 +71,57 @@ namespace PocketBlaster.EditorTools
             light.intensity = 1.1f;
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
-            // オーナーからのプレイテストFB(2026-09-06)「敵が大きすぎて狙う要素が少ない。
-            // 遠くから小さいところから表示してほしい」を受けて、出現距離を離し
-            // スケールも控えめにした(以前はz=6-9・scale2-4)。ウェーブが進むほど
-            // approachSpeedを少し上げて、後半ほど緊迫感が増すようにしてある。
+            // 敵はもっと遠く・小さく出す(オーナー要望、2026-09-06:「敵はもっともっと遠くて
+            // 小さいところから出てくるイメージです」、以前はz=15-18・scale1.3-2.4)。
+            // 被弾可能回数・移動速度・移動パターン(蛇行するか)は種類ごとにEnemyFactory側で
+            // 固定のプロフィールとして持つ(オーナー要望「敵ごとに同じパラメータに
+            // ならないように」)。
+            const float normalScale = 0.85f;
+            const float bossScale = 1.8f;
+
             var wave1Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-3f, 1.6f, 18f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
-                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_R", new Vector3(3f, 1.6f, 18f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_L", new Vector3(-3f, 1.6f, 32f), EnemyFactory.VegetableKind.Tomato, tomatoSprite, TomatoJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave1_Tomato_R", new Vector3(3f, 1.6f, 32f), EnemyFactory.VegetableKind.Tomato, tomatoSprite, TomatoJuice, normalScale, respawns: false, approaches: true),
             };
 
             var wave2Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_L", new Vector3(-4f, 1.6f, 17f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
-                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 17.5f), onionSprite, OnionJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
-                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(4f, 1.6f, 17f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1f),
+                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_L", new Vector3(-4f, 1.6f, 30f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave2_Onion_C", new Vector3(0f, 1.6f, 30.5f), EnemyFactory.VegetableKind.Onion, onionSprite, OnionJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave2_Carrot_R", new Vector3(4f, 1.6f, 30f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
             };
 
             var wave3Enemies = new[]
             {
-                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_L", new Vector3(-4f, 1.6f, 16f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
-                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_ML", new Vector3(-1.3f, 1.6f, 16.5f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
-                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_MR", new Vector3(1.3f, 1.6f, 16.5f), carrotSprite, CarrotJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
-                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_R", new Vector3(4f, 1.6f, 16f), tomatoSprite, TomatoJuice, 1.3f, respawns: false, approaches: true, approachSpeed: 1.1f),
+                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_L", new Vector3(-4f, 1.6f, 28f), EnemyFactory.VegetableKind.Tomato, tomatoSprite, TomatoJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_ML", new Vector3(-1.3f, 1.6f, 28.5f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave3_Carrot_MR", new Vector3(1.3f, 1.6f, 28.5f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave3_Tomato_R", new Vector3(4f, 1.6f, 28f), EnemyFactory.VegetableKind.Tomato, tomatoSprite, TomatoJuice, normalScale, respawns: false, approaches: true),
             };
 
-            // ボス: 3発当てるまで倒れない(TargetHitStateのhitPoints)。1〜2発目は短いFlashだけで
-            // またIdleに戻り、狙い続けられる。最後の1発でようやくKnockDown〜Defeatedへ進む。
-            var bossEnemy = EnemyFactory.CreateVegetableZombie(
-                "Wave4_PumpkinBoss", new Vector3(0f, 2f, 15f), pumpkinSprite, PumpkinJuice, 2.4f, respawns: false,
-                approaches: true, approachSpeed: 0.65f);
-            ConfigureAsBoss(bossEnemy, hitPoints: 3, pointValue: 1000);
-            var wave4Enemies = new[] { bossEnemy };
+            var wave4Enemies = new[]
+            {
+                EnemyFactory.CreateVegetableZombie("Wave4_Onion_L", new Vector3(-4.5f, 1.6f, 26f), EnemyFactory.VegetableKind.Onion, onionSprite, OnionJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave4_Tomato_C", new Vector3(0f, 1.6f, 26.5f), EnemyFactory.VegetableKind.Tomato, tomatoSprite, TomatoJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave4_Onion_R", new Vector3(4.5f, 1.6f, 26f), EnemyFactory.VegetableKind.Onion, onionSprite, OnionJuice, normalScale, respawns: false, approaches: true),
+            };
+
+            var wave5Enemies = new[]
+            {
+                EnemyFactory.CreateVegetableZombie("Wave5_Carrot_L", new Vector3(-5f, 1.6f, 24f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave5_Carrot_ML", new Vector3(-1.7f, 1.6f, 24.5f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave5_Carrot_MR", new Vector3(1.7f, 1.6f, 24.5f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
+                EnemyFactory.CreateVegetableZombie("Wave5_Carrot_R", new Vector3(5f, 1.6f, 24f), EnemyFactory.VegetableKind.Carrot, carrotSprite, CarrotJuice, normalScale, respawns: false, approaches: true),
+            };
+
+            // ボス: 3発当てるまで倒れない(EnemyFactoryのPumpkinBossプロフィール、
+            // TargetHitState/Target参照)。1〜2発目は短いFlashだけでまたIdleに戻り、
+            // 狙い続けられる。最後の1発でようやくKnockDown〜Defeatedへ進む。
+            var wave6Enemies = new[]
+            {
+                EnemyFactory.CreateVegetableZombie("Wave6_PumpkinBoss", new Vector3(0f, 2f, 22f), EnemyFactory.VegetableKind.PumpkinBoss, pumpkinSprite, PumpkinJuice, bossScale, respawns: false, approaches: true),
+            };
 
             var rigGo = new GameObject("GyroAimTestRig");
             // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。
@@ -117,13 +139,16 @@ namespace PocketBlaster.EditorTools
             var directorSo = new SerializedObject(director);
             directorSo.FindProperty("stageCamera").objectReferenceValue = camera;
             directorSo.FindProperty("moveTarget").objectReferenceValue = playerRigGo.transform;
+            directorSo.FindProperty("reticleController").objectReferenceValue = reticleController;
 
             var wavesProp = directorSo.FindProperty("waves");
-            wavesProp.arraySize = 4;
-            SetWave(wavesProp.GetArrayElementAtIndex(0), wave1Waypoint, wave1Enemies);
-            SetWave(wavesProp.GetArrayElementAtIndex(1), wave2Waypoint, wave2Enemies);
-            SetWave(wavesProp.GetArrayElementAtIndex(2), wave3Waypoint, wave3Enemies);
-            SetWave(wavesProp.GetArrayElementAtIndex(3), wave4Waypoint, wave4Enemies);
+            wavesProp.arraySize = 6;
+            SetWave(wavesProp.GetArrayElementAtIndex(0), waveWaypoints[0], wave1Enemies);
+            SetWave(wavesProp.GetArrayElementAtIndex(1), waveWaypoints[1], wave2Enemies);
+            SetWave(wavesProp.GetArrayElementAtIndex(2), waveWaypoints[2], wave3Enemies);
+            SetWave(wavesProp.GetArrayElementAtIndex(3), waveWaypoints[3], wave4Enemies);
+            SetWave(wavesProp.GetArrayElementAtIndex(4), waveWaypoints[4], wave5Enemies);
+            SetWave(wavesProp.GetArrayElementAtIndex(5), waveWaypoints[5], wave6Enemies);
 
             directorSo.ApplyModifiedPropertiesWithoutUndo();
 
@@ -144,14 +169,6 @@ namespace PocketBlaster.EditorTools
             go.transform.position = position;
             go.transform.rotation = Quaternion.identity;
             return go.transform;
-        }
-
-        private static void ConfigureAsBoss(Target target, int hitPoints, int pointValue)
-        {
-            var so = new SerializedObject(target);
-            so.FindProperty("hitPoints").intValue = hitPoints;
-            so.FindProperty("pointValue").intValue = pointValue;
-            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void SetWave(SerializedProperty waveProp, Transform waypoint, Target[] enemies)

@@ -43,5 +43,25 @@ namespace PocketBlaster.Tests.EditMode
             Assert.AreEqual(3, ammo.CurrentAmmo);
             Assert.IsTrue(ammo.CanShoot);
         }
+
+        [Test]
+        public void IncreaseMagazineSizeGrowsBothMagazineAndCurrentAmmo()
+        {
+            var ammo = new AmmoState(3);
+            ammo.Shoot();
+            ammo.IncreaseMagazineSize(2);
+            Assert.AreEqual(5, ammo.MagazineSize);
+            Assert.AreEqual(4, ammo.CurrentAmmo, "取得した分だけ即座に使える弾も増えること");
+        }
+
+        [Test]
+        public void IncreaseMagazineSizeIgnoresNonPositiveAmounts()
+        {
+            var ammo = new AmmoState(3);
+            ammo.IncreaseMagazineSize(0);
+            ammo.IncreaseMagazineSize(-2);
+            Assert.AreEqual(3, ammo.MagazineSize);
+            Assert.AreEqual(3, ammo.CurrentAmmo);
+        }
     }
 }

@@ -30,5 +30,23 @@ namespace PocketBlaster.Tests.EditMode
             Assert.IsFalse(lives.LoseLife(), "既にゲームオーバーの状態からの重複呼び出しはfalseを返す");
             Assert.AreEqual(0, lives.RemainingLives, "重複呼び出しでマイナスにならないこと");
         }
+
+        [Test]
+        public void RestoreLifeIncreasesRemainingLives()
+        {
+            var lives = new LivesState(3);
+            lives.LoseLife();
+            Assert.AreEqual(2, lives.RemainingLives);
+            lives.RestoreLife();
+            Assert.AreEqual(3, lives.RemainingLives);
+        }
+
+        [Test]
+        public void RestoreLifeIsCappedAtStartingLives()
+        {
+            var lives = new LivesState(2);
+            lives.RestoreLife();
+            Assert.AreEqual(2, lives.RemainingLives, "初期値を超えて回復しないこと");
+        }
     }
 }

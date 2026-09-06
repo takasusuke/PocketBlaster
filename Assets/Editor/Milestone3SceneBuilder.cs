@@ -42,7 +42,7 @@ namespace PocketBlaster.EditorTools
 
             var tomatoSprite = EnemyFactory.LoadSpriteOrPlaceholder(TomatoSpritePath);
             EnemyFactory.CreateVegetableZombie(
-                "Target_TomatoZombie", new Vector3(0f, 1.6f, 8f), tomatoSprite,
+                "Target_TomatoZombie", new Vector3(0f, 1.6f, 8f), EnemyFactory.VegetableKind.Tomato, tomatoSprite,
                 juiceColor: new Color(0.9f, 0.15f, 0.1f), scale: 2f, respawns: true);
 
             var rigGo = new GameObject("GyroAimTestRig");

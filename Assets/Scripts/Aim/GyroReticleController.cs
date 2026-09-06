@@ -341,7 +341,7 @@ namespace PocketBlaster.Aim
             return cam.ScreenPointToRay(screenPoint);
         }
 
-        /// <returns>Targetにヒットしたか</returns>
+        /// <returns>何か(敵・アイテム等のIShootable)にヒットしたか</returns>
         private bool TryHitTargetAtReticle()
         {
             var aimRay = GetAimRay();
@@ -353,12 +353,14 @@ namespace PocketBlaster.Aim
 
             var ray = aimRay.Value;
 
+            // TargetとPickupはどちらもIShootable(共通の狙撃対象契約、IShootable.cs参照)
+            // なので、ここでは種類を区別せず同じ判定にまとめている。
             if (Physics.Raycast(ray, out var hit, maxHitDistance, hitLayerMask))
             {
-                var target = hit.collider.GetComponentInParent<Target>();
-                if (target != null && target.IsHittable)
+                var shootable = hit.collider.GetComponentInParent<IShootable>();
+                if (shootable != null && shootable.IsHittable)
                 {
-                    target.TakeHit();
+                    shootable.TakeHit();
                     _audioSource.PlayOneShot(_hitClip);
                     return true;
                 }
@@ -366,6 +368,22 @@ namespace PocketBlaster.Aim
 
             _audioSource.PlayOneShot(_missClip);
             return false;
+        }
+
+        /// <summary>
+        /// アイテム(Pickup)経由でのリロード(オーナー要望、2026-09-06:「リロードできる
+        /// アイテム」)。手動リロードと違い再キャリブレーションは行わない — 弾切れ自動
+        /// リロードと同じ理由(ドリフト対策、BeginReload参照)。
+        /// </summary>
+        public void ApplyReloadPickup()
+        {
+            BeginReload(recenterOnComplete: false);
+        }
+
+        /// <summary>アイテム(Pickup)経由での最大弾薬数増加(オーナー要望、2026-09-06)。</summary>
+        public void ApplyAmmoUpPickup(int amount)
+        {
+            _ammo.IncreaseMagazineSize(amount);
         }
 
         private void HandleReload()

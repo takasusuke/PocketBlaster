@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PocketBlaster.Gameplay;
 using UnityEditor;
 using UnityEngine;
@@ -8,13 +9,59 @@ namespace PocketBlaster.EditorTools
     /// スプライトベースの敵(野菜ゾンビ、docs/requirements.md 決定済み事項)を
     /// シーンビルダーから共通の手順で組み立てるためのヘルパー。ルート(Billboard+コライダー)と
     /// 子(Visual、SpriteRenderer+倒れ込み回転)を分けているのはTarget.cs参照。
+    ///
+    /// 被弾可能回数・移動速度・移動パターン(左右に避けながら接近する等)は「種類ごと」に
+    /// 固定のプロフィールとして持たせている(オーナー要望、2026-09-06:「それぞれの敵に
+    /// 応じて被弾可能回数や移動速度や移動方法を定義して、敵ごとに同じパラメータに
+    /// ならないようにしてください」)。同じ種類の野菜ゾンビはどのステージに出てきても
+    /// 同じ「性格」を持つ、という一貫性を優先し、呼び出し側での個別上書きは設けていない。
     /// </summary>
     public static class EnemyFactory
     {
-        public static Target CreateVegetableZombie(
-            string name, Vector3 position, Sprite sprite, Color juiceColor, float scale, bool respawns,
-            bool approaches = false, float approachSpeed = 0.6f, float damageRange = 1.5f)
+        public enum VegetableKind
         {
+            Tomato,
+            Carrot,
+            Onion,
+            PumpkinBoss
+        }
+
+        private readonly struct VegetableProfile
+        {
+            public readonly int HitPoints;
+            public readonly float ApproachSpeed;
+            public readonly float WeaveAmplitude;
+            public readonly float WeaveFrequency;
+            public readonly int PointValue;
+
+            public VegetableProfile(int hitPoints, float approachSpeed, float weaveAmplitude, float weaveFrequency, int pointValue)
+            {
+                HitPoints = hitPoints;
+                ApproachSpeed = approachSpeed;
+                WeaveAmplitude = weaveAmplitude;
+                WeaveFrequency = weaveFrequency;
+                PointValue = pointValue;
+            }
+        }
+
+        // トマト: 1発で倒れる代わりに足が速く、まっすぐ突っ込んでくる(反応速度を試す型)。
+        // キャロット: すばしっこく、左右に大きく避けながら接近する(狙いを絞らせない型)。
+        // オニオン: 硬く(2発)、その分足は遅い(見た目に反して脅威度が高い型)。
+        // パンプキンボス: 硬く(3発)、足は遅いが軽く揺れながら迫る(ボスらしい重厚感)。
+        private static readonly Dictionary<VegetableKind, VegetableProfile> Profiles = new Dictionary<VegetableKind, VegetableProfile>
+        {
+            { VegetableKind.Tomato, new VegetableProfile(hitPoints: 1, approachSpeed: 1.5f, weaveAmplitude: 0f, weaveFrequency: 0f, pointValue: 100) },
+            { VegetableKind.Carrot, new VegetableProfile(hitPoints: 1, approachSpeed: 1.0f, weaveAmplitude: 1.0f, weaveFrequency: 1.6f, pointValue: 130) },
+            { VegetableKind.Onion, new VegetableProfile(hitPoints: 2, approachSpeed: 0.6f, weaveAmplitude: 0f, weaveFrequency: 0f, pointValue: 180) },
+            { VegetableKind.PumpkinBoss, new VegetableProfile(hitPoints: 3, approachSpeed: 0.55f, weaveAmplitude: 0.35f, weaveFrequency: 0.4f, pointValue: 500) },
+        };
+
+        public static Target CreateVegetableZombie(
+            string name, Vector3 position, VegetableKind kind, Sprite sprite, Color juiceColor, float scale,
+            bool respawns, bool approaches = false, float damageRange = 1.5f)
+        {
+            var profile = Profiles[kind];
+
             var root = new GameObject(name);
             root.transform.position = position;
             root.AddComponent<Billboard>();
@@ -34,6 +81,8 @@ namespace PocketBlaster.EditorTools
             so.FindProperty("visualTransform").objectReferenceValue = visualGo.transform;
             so.FindProperty("respawnsAfterDefeat").boolValue = respawns;
             so.FindProperty("juiceColor").colorValue = juiceColor;
+            so.FindProperty("hitPoints").intValue = profile.HitPoints;
+            so.FindProperty("pointValue").intValue = profile.PointValue;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             // 固定的な仮の敵(Milestone3)には付けない。ウェーブ制のステージだけ
@@ -42,8 +91,10 @@ namespace PocketBlaster.EditorTools
             {
                 var approach = root.AddComponent<EnemyApproach>();
                 var approachSo = new SerializedObject(approach);
-                approachSo.FindProperty("approachSpeed").floatValue = approachSpeed;
+                approachSo.FindProperty("approachSpeed").floatValue = profile.ApproachSpeed;
                 approachSo.FindProperty("damageRange").floatValue = damageRange;
+                approachSo.FindProperty("weaveAmplitude").floatValue = profile.WeaveAmplitude;
+                approachSo.FindProperty("weaveFrequency").floatValue = profile.WeaveFrequency;
                 approachSo.ApplyModifiedPropertiesWithoutUndo();
             }
 
