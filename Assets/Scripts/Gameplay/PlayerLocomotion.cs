@@ -52,11 +52,13 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Transform movableRoot;
         [SerializeField] private GyroReticleController aimSource;
         // オーナー要望2026-09-06「プレイヤーの移動速度を速めてください」を受けて
-        // 0.3→0.7に引き上げた(1歩ぶんの移動距離)。
-        [SerializeField] private float stepDistance = 0.7f;
-        // 「自由に歩き回るようにします」(2026-09-06)を受けて9m→30mに拡大。
-        // GroundFactoryで敷いた床の範囲に収まる程度の緩い上限。
-        [SerializeField] private float maxOffsetRadius = 30f;
+        // 0.3→0.7に引き上げ、さらに「移動速度は3倍にしてください」を受けて0.7→2.1に
+        // 引き上げた(1歩ぶんの移動距離)。
+        [SerializeField] private float stepDistance = 2.1f;
+        // 「自由に歩き回るようにします」(2026-09-06)を受けて9m→30mに拡大、さらに
+        // 「移動できる範囲は6倍にしてください」を受けて30m→180mに拡大した。
+        // GroundFactoryの床サイズも合わせて拡大している(GroundFactory.cs参照)。
+        [SerializeField] private float maxOffsetRadius = 180f;
         [SerializeField] private float moveTiltDeadzoneDegrees = 5f;
         [SerializeField] private float moveTiltMaxDegrees = 30f;
         [SerializeField] private float maxLookPitchDegrees = 60f;

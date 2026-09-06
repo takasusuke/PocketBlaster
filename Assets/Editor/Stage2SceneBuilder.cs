@@ -72,8 +72,9 @@ namespace PocketBlaster.EditorTools
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
             // 移動している量が分かるように床にグリッドを敷く(オーナー要望、2026-09-06)。
-            // 全ウェーブの奥行き(z=0〜32)をカバーする大きさにしてある。
-            GroundFactory.CreateGrid("Ground", new Vector3(0f, 0f, 16f), 50f);
+            // PlayerLocomotion.maxOffsetRadius(180m、「移動できる範囲は6倍にしてください」)
+            // を余裕を持ってカバーする大きさに拡大した。
+            GroundFactory.CreateGrid("Ground", new Vector3(0f, 0f, 16f), 400f);
 
             // 敵はもっと遠く・小さく出す(オーナー要望、2026-09-06:「敵はもっともっと遠くて
             // 小さいところから出てくるイメージです」、以前はz=15-18・scale1.3-2.4)。
@@ -139,6 +140,12 @@ namespace PocketBlaster.EditorTools
             // 足場(オーナー要望2026-09-06:「あまりに高いところから飛び降りる場合には
             // ダメージが入るようにしてください」を試すための高低差)。Milestone4SceneBuilder参照。
             ObstacleFactory.CreateBox("Obstacle_Platform", new Vector3(3f, 0f, 6f), 1f, 3f, new Color(0.5f, 0.5f, 0.55f), isPlatform: true);
+
+            // 実際に登れる一本道のパルクール構造物・広がった移動範囲を埋める追加
+            // オブジェクト(オーナー要望2026-09-06:「パルクールなども実装してください」
+            // 「他にもオブジェクトを配置してください」)。Milestone4SceneBuilder参照。
+            FieldObstacleScatterer.BuildParkourStaircase("Parkour", new Vector3(-6f, 0f, 8f), Vector3.right);
+            FieldObstacleScatterer.Scatter("FieldObstacle", seed: 4002, innerRadius: 40f, outerRadius: 170f, count: 40);
 
             var rigGo = new GameObject("GyroAimTestRig");
             // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。

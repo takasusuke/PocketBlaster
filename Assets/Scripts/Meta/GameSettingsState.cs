@@ -16,14 +16,15 @@ namespace PocketBlaster.Meta
     /// 違う値(角度→ピクセルのオフセットではなく、角度→回転の角速度)なので、
     /// 別の設定(LookSensitivity)として独立させている(オーナー要望、2026-09-06:
     /// 「構えるときの感度と、構えていない時の感度はそれぞれ調整できるようにして
-    /// 下さい」)。
+    /// 下さい」)。既定・上下限は範囲ごと5倍にしてある(オーナー要望、2026-09-06:
+    /// 「構えていない状態の感度を5倍にしてください」)。
     /// </summary>
     public class GameSettingsState
     {
         public const float MinSensitivity = 4f;
         public const float MaxSensitivity = 24f;
-        public const float MinLookSensitivity = 20f;
-        public const float MaxLookSensitivity = 120f;
+        public const float MinLookSensitivity = 100f;
+        public const float MaxLookSensitivity = 600f;
 
         public bool IsArcadeMode { get; private set; }
         public float SfxVolume { get; private set; }
@@ -44,7 +45,7 @@ namespace PocketBlaster.Meta
         {
             return new GameSettingsState(
                 isArcadeMode: false, sfxVolume: 1f,
-                verticalSensitivity: 12f, horizontalSensitivity: 12f, lookSensitivity: 60f);
+                verticalSensitivity: 12f, horizontalSensitivity: 12f, lookSensitivity: 300f);
         }
 
         public void SetMode(bool isArcadeMode)

@@ -20,5 +20,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Title.unity
     guid: bb6a8522c9e99f643a65e64bc7a6a80d
+  - enabled: 1
+    path: Assets/Scenes/PracticeRange.unity
+    guid: 3bb336987ec1e3f42912e8a5bb2dbfdf
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

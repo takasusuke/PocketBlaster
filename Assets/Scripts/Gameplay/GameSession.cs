@@ -49,6 +49,7 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private int maxHealth = 100;
         [SerializeField] private int enemyContactDamage = 30;
         [SerializeField] private int healthPickupHealAmount = 30;
+        [SerializeField] private float returnToTitleDelaySeconds = 5f;
         [SerializeField] private GyroReticleController reticleController;
         [SerializeField] private StageDirector stageDirector;
         [SerializeField] private PlayerLocomotion playerLocomotion;
@@ -175,8 +176,19 @@ namespace PocketBlaster.Gameplay
                 _isGameOver = true;
                 _gameOverReason = reason;
                 if (reticleController != null) reticleController.enabled = false;
+                // ステージ終了(ゲームオーバー)後は起動画面に戻れるようにする
+                // (オーナー要望、2026-09-06:「ステージ終了後は起動画面に戻れるように
+                // してください」)。スコア・回数直後の「再挑戦」操作(スマホ)は
+                // シーンリロードでこのコルーチンごと消えるため、両立して問題ない。
+                StartCoroutine(ReturnToTitleAfterDelay(returnToTitleDelaySeconds));
             }
             UpdateLabel();
+        }
+
+        private IEnumerator ReturnToTitleAfterDelay(float delaySeconds)
+        {
+            yield return new WaitForSeconds(delaySeconds);
+            SceneManager.LoadScene("Title");
         }
 
         /// <summary>

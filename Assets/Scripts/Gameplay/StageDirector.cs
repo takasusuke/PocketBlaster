@@ -3,6 +3,7 @@ using PocketBlaster.Aim;
 using PocketBlaster.Meta;
 using PocketBlaster.UI;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 
 namespace PocketBlaster.Gameplay
@@ -26,7 +27,12 @@ namespace PocketBlaster.Gameplay
     ///
     /// 敵がプレイヤーに近づき過ぎて退場した場合(EnemyApproach.OnReachedPlayer)も、
     /// 撃って倒した場合と同様にウェーブの残り数からは減らすが、加点はしない。
-    /// OnEnemyReachedPlayerでGameSessionへ中継し、難易度モードの残機減少に使う。
+    /// OnEnemyReachedPlayerでGameSessionへ中継し、難易度モードのHP減少に使う。
+    ///
+    /// 全ウェーブクリア後は、スコア・評価を表示してから起動画面(Title)へ自動的に
+    /// 戻る(オーナー要望2026-09-06:「ステージ終了後は起動画面に戻れるようにして
+    /// ください」、ShowStageClear/ReturnToTitleAfterDelay参照)。GameSessionも
+    /// ゲームオーバー側で同様の自動遷移を独立して持つ(お互いを参照しない)。
     /// </summary>
     public class StageDirector : MonoBehaviour
     {
@@ -42,6 +48,7 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Wave[] waves;
         [SerializeField] private GyroReticleController reticleController;
         [SerializeField, Range(0f, 1f)] private float pickupSpawnChance = 0.5f;
+        [SerializeField] private float returnToTitleDelaySeconds = 5f;
 
         /// <summary>
         /// 敵がプレイヤーに近づき過ぎて退場した(EnemyApproach.OnReachedPlayer)瞬間に
@@ -51,8 +58,8 @@ namespace PocketBlaster.Gameplay
 
         /// <summary>
         /// 体力回復アイテムを取得した瞬間に中継される(オーナー要望、2026-09-06:
-        /// 「撃つとプレイヤーの体力を回復するアイテム」)。GameSessionが残機回復に使う
-        /// (このゲームは連続値のHPではなく残機制のため、「回復」は「残機を1つ戻す」ことにした)。
+        /// 「撃つとプレイヤーの体力を回復するアイテム」)。GameSessionがHPゲージの
+        /// 回復に使う(PlayerHealthState参照)。
         /// </summary>
         public event System.Action OnHealthPickupCollected;
 
@@ -233,6 +240,17 @@ namespace PocketBlaster.Gameplay
             _waveLabel.text = $"ステージクリア！\n{highScoreLine}";
 
             ShowGrade(ScoreGrade.Compute(_score.TotalScore, _maxPossibleScore));
+
+            // ステージ終了後は起動画面に戻れるようにする(オーナー要望、2026-09-06:
+            // 「ステージ終了後は起動画面に戻れるようにしてください」)。スコア・評価を
+            // 一定時間表示してから遷移する — 見せた瞬間に切り替わると読めないため。
+            StartCoroutine(ReturnToTitleAfterDelay(returnToTitleDelaySeconds));
+        }
+
+        private IEnumerator ReturnToTitleAfterDelay(float delaySeconds)
+        {
+            yield return new WaitForSeconds(delaySeconds);
+            SceneManager.LoadScene("Title");
         }
 
         /// <summary>

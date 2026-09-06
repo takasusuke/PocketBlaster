@@ -27,6 +27,12 @@ namespace PocketBlaster.UI
     /// Button.clickedは外部から発火できないイベントのため、この方式にした)。
     /// キャリブレーションはゲームプレイ画面と同様「リロード」操作(webapp参照)で行うが、
     /// このメニュー画面では低リスクなので明示的な案内画面は出さず、軽いヒント表示のみにした。
+    ///
+    /// 感度スライダー自体はスマホの「狙って撃つ」では連続的にドラッグできないため、
+    /// 各スライダーに"−"/"＋"ボタンを添えて段階調整できるようにしてある(オーナー要望、
+    /// 2026-09-06:「起動画面で感度を上下されるボタンをスマホから狙って撃つことで
+    /// 調整できるようにしてください」。BuildAdjustableSlider参照)。マウスでのドラッグも
+    /// 引き続き使える。
     /// </summary>
     public class TitleScreenController : MonoBehaviour
     {
@@ -34,6 +40,10 @@ namespace PocketBlaster.UI
         [SerializeField] private string stage1DisplayName = "ステージ1";
         [SerializeField] private string stage2SceneName = "Stage2_BossRush";
         [SerializeField] private string stage2DisplayName = "ステージ2（ボスラッシュ）";
+        // 練習モード(オーナー要望、2026-09-06:「敵は出てこず、ただ移動して、構えて撃つ
+        // だけの練習をするモードを実装してください」)。PracticeRangeSceneBuilder参照。
+        [SerializeField] private string practiceSceneName = "PracticeRange";
+        [SerializeField] private string practiceDisplayName = "練習（射撃レンジ）";
 
         private static readonly Color SelectedColor = new Color(0.30f, 0.45f, 0.95f);
         private static readonly Color UnselectedColor = new Color(0.2f, 0.2f, 0.26f);
@@ -224,32 +234,18 @@ namespace PocketBlaster.UI
             // 「上下左右方向の感度をユーザごとに調整できるようにしてください」)。
             _verticalSensitivityLabel = BuildValueLabel();
             panel.Add(_verticalSensitivityLabel);
-            var verticalSlider = new Slider(GameSettingsState.MinSensitivity, GameSettingsState.MaxSensitivity)
-            {
-                value = GameSettings.Current.VerticalSensitivity
-            };
-            verticalSlider.style.marginBottom = 12;
-            verticalSlider.RegisterValueChangedCallback(evt =>
-            {
-                GameSettings.SetVerticalSensitivity(evt.newValue);
-                UpdateVerticalSensitivityLabel();
-            });
-            panel.Add(verticalSlider);
+            BuildAdjustableSlider(
+                panel, GameSettingsState.MinSensitivity, GameSettingsState.MaxSensitivity,
+                GameSettings.Current.VerticalSensitivity, 12,
+                v => { GameSettings.SetVerticalSensitivity(v); UpdateVerticalSensitivityLabel(); });
             UpdateVerticalSensitivityLabel();
 
             _horizontalSensitivityLabel = BuildValueLabel();
             panel.Add(_horizontalSensitivityLabel);
-            var horizontalSlider = new Slider(GameSettingsState.MinSensitivity, GameSettingsState.MaxSensitivity)
-            {
-                value = GameSettings.Current.HorizontalSensitivity
-            };
-            horizontalSlider.style.marginBottom = 16;
-            horizontalSlider.RegisterValueChangedCallback(evt =>
-            {
-                GameSettings.SetHorizontalSensitivity(evt.newValue);
-                UpdateHorizontalSensitivityLabel();
-            });
-            panel.Add(horizontalSlider);
+            BuildAdjustableSlider(
+                panel, GameSettingsState.MinSensitivity, GameSettingsState.MaxSensitivity,
+                GameSettings.Current.HorizontalSensitivity, 16,
+                v => { GameSettings.SetHorizontalSensitivity(v); UpdateHorizontalSensitivityLabel(); });
             UpdateHorizontalSensitivityLabel();
 
             // 「構えていない間」(視界の回転、PlayerLocomotion参照)の感度は、狙いの
@@ -258,17 +254,10 @@ namespace PocketBlaster.UI
             // 構えていない時の感度はそれぞれ調整できるようにして下さい」)。
             _lookSensitivityLabel = BuildValueLabel();
             panel.Add(_lookSensitivityLabel);
-            var lookSlider = new Slider(GameSettingsState.MinLookSensitivity, GameSettingsState.MaxLookSensitivity)
-            {
-                value = GameSettings.Current.LookSensitivity
-            };
-            lookSlider.style.marginBottom = 24;
-            lookSlider.RegisterValueChangedCallback(evt =>
-            {
-                GameSettings.SetLookSensitivity(evt.newValue);
-                UpdateLookSensitivityLabel();
-            });
-            panel.Add(lookSlider);
+            BuildAdjustableSlider(
+                panel, GameSettingsState.MinLookSensitivity, GameSettingsState.MaxLookSensitivity,
+                GameSettings.Current.LookSensitivity, 24,
+                v => { GameSettings.SetLookSensitivity(v); UpdateLookSensitivityLabel(); });
             UpdateLookSensitivityLabel();
 
             panel.Add(BuildSectionLabel("ステージを選んでスタート"));
@@ -277,8 +266,12 @@ namespace PocketBlaster.UI
             RegisterClickTarget(stage1Button, () => StartStage(stage1SceneName));
             panel.Add(stage1Button);
             var stage2Button = BuildStartButton(stage2DisplayName, () => StartStage(stage2SceneName));
+            stage2Button.style.marginBottom = 8;
             RegisterClickTarget(stage2Button, () => StartStage(stage2SceneName));
             panel.Add(stage2Button);
+            var practiceButton = BuildStartButton(practiceDisplayName, () => StartStage(practiceSceneName));
+            RegisterClickTarget(practiceButton, () => StartStage(practiceSceneName));
+            panel.Add(practiceButton);
 
             // スマホでの狙い操作用の状態表示とレティクル(root直下、パネルの外)。
             _phoneHintLabel = new Label();
@@ -328,6 +321,58 @@ namespace PocketBlaster.UI
         private void UpdateLookSensitivityLabel()
         {
             _lookSensitivityLabel.text = $"感度（構えない・視界回転）: {GameSettings.Current.LookSensitivity:F1}";
+        }
+
+        /// <summary>
+        /// スライダー本体に加えて"−"/"＋"の段階調整ボタンを横に並べた行をpanelへ追加する。
+        /// ボタンはマウスクリックに加えて<see cref="RegisterClickTarget"/>でスマホの
+        /// 「狙って撃つ」操作からも押せるようにする(オーナー要望、2026-09-06)。
+        /// ボタンはslider.valueを変更するだけで、実際の設定への反映はスライダー本体の
+        /// RegisterValueChangedCallback(呼び出し側から渡されるonChanged)に任せる —
+        /// マウスドラッグと同じ経路を通ることで、値の反映漏れを防ぐ。
+        /// </summary>
+        private Slider BuildAdjustableSlider(VisualElement panel, float min, float max, float initialValue, float marginBottom, Action<float> onChanged)
+        {
+            var row = new VisualElement();
+            row.style.flexDirection = FlexDirection.Row;
+            row.style.alignItems = Align.Center;
+            row.style.marginBottom = marginBottom;
+
+            var slider = new Slider(min, max) { value = initialValue };
+            slider.style.flexGrow = 1;
+            slider.RegisterValueChangedCallback(evt => onChanged(evt.newValue));
+            row.Add(slider);
+
+            var step = (max - min) / 20f;
+            void Decrease() => slider.value = Mathf.Clamp(slider.value - step, min, max);
+            void Increase() => slider.value = Mathf.Clamp(slider.value + step, min, max);
+
+            var minusButton = BuildAdjustButton("−", Decrease);
+            var plusButton = BuildAdjustButton("＋", Increase);
+            RegisterClickTarget(minusButton, Decrease);
+            RegisterClickTarget(plusButton, Increase);
+            row.Add(minusButton);
+            row.Add(plusButton);
+
+            panel.Add(row);
+            return slider;
+        }
+
+        private static Button BuildAdjustButton(string text, Action onClick)
+        {
+            var button = new Button(onClick) { text = text };
+            button.style.width = 34;
+            button.style.height = 34;
+            button.style.marginLeft = 6;
+            button.style.color = Color.white;
+            button.style.fontSize = 18;
+            button.style.unityFontStyleAndWeight = FontStyle.Bold;
+            button.style.borderTopLeftRadius = 8;
+            button.style.borderTopRightRadius = 8;
+            button.style.borderBottomLeftRadius = 8;
+            button.style.borderBottomRightRadius = 8;
+            RuntimeLabelStyle.ApplyDefaultFont(button);
+            return button;
         }
 
         private static Label BuildSectionLabel(string text)

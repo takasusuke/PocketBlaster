@@ -68,8 +68,9 @@ namespace PocketBlaster.EditorTools
             lightGo.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
 
             // 移動している量が分かるように床にグリッドを敷く(オーナー要望、2026-09-06)。
-            // 全ウェーブの奥行き(z=0〜26)をカバーする大きさにしてある。
-            GroundFactory.CreateGrid("Ground", new Vector3(0f, 0f, 13f), 45f);
+            // PlayerLocomotion.maxOffsetRadius(180m、「移動できる範囲は6倍にしてください」)
+            // を余裕を持ってカバーする大きさに拡大した。
+            GroundFactory.CreateGrid("Ground", new Vector3(0f, 0f, 13f), 400f);
 
             // 敵はもっと遠く・小さく出す(オーナー要望、2026-09-06:「敵はもっともっと遠くて
             // 小さいところから出てくるイメージです」、以前はz=14-16・scale1.4-2.2)。
@@ -126,6 +127,16 @@ namespace PocketBlaster.EditorTools
             // 無視して常に登れる(Obstacle.IsPlatform)。安全な高さ(1.5m)を超える
             // 3mから飛び降りると落下ダメージが発生する。
             ObstacleFactory.CreateBox("Obstacle_Platform", new Vector3(3f, 0f, 6f), 1f, 3f, new Color(0.5f, 0.5f, 0.55f), isPlatform: true);
+
+            // 実際に登れる一本道のパルクール構造物(オーナー要望2026-09-06:
+            // 「パルクールなども実装してください」)。出発点の近く、ウェーブの
+            // 敵配置とは重ならない場所に置く。
+            FieldObstacleScatterer.BuildParkourStaircase("Parkour", new Vector3(-6f, 0f, 8f), Vector3.right);
+
+            // 広がった移動範囲(180m)を埋める追加オブジェクト(オーナー要望2026-09-06:
+            // 「他にもオブジェクトを配置してください」)。ウェーブの敵・アイテムの
+            // エリア(半径40m以内)は避けて、その外側にばら撒く。
+            FieldObstacleScatterer.Scatter("FieldObstacle", seed: 4001, innerRadius: 40f, outerRadius: 170f, count: 40);
 
             var rigGo = new GameObject("GyroAimTestRig");
             // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。
