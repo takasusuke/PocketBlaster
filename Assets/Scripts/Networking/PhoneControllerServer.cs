@@ -25,11 +25,33 @@ namespace PocketBlaster.Networking
     /// そのため証明書を構成プロファイルとしてインストールし「常に信頼する」設定に
     /// する方式に変更 — 別ポート(certificatePort)で証明書の公開部分だけを平文HTTPで
     /// 配布するCertificateDownloadServerを併走させる。
+    ///
+    /// シーンをまたいで生き続ける永続シングルトン(2026-09-06、オーナー報告:「再挑戦すると、
+    /// スマホとの接続が切れてしまいました」への対応)。以前は各シーンの"GyroAimTestRig"に
+    /// 直接AddComponentしていたため、`GameSession`の「再挑戦」(シーンリロード)や
+    /// 起動画面からステージへの遷移のたびにこのMonoBehaviourごと破棄・再生成され、
+    /// 生きていたTCP/WebSocket接続まで道連れで切れていた。`GetOrCreate()`経由でのみ
+    /// 取得させ、`DontDestroyOnLoad`で1個だけ生き残らせることで、シーン遷移をまたいで
+    /// 同じ接続を保持できるようにした。
     /// </summary>
     public class PhoneControllerServer : MonoBehaviour
     {
         [SerializeField] private int port = 7777;
         [SerializeField] private int certificatePort = 7778;
+
+        public static PhoneControllerServer Instance { get; private set; }
+
+        /// <summary>
+        /// 生きている永続インスタンスを返す。無ければ専用のGameObjectを新規作成する。
+        /// シーン(GyroAimTestRig等)に直接AddComponentしない — シーン側のGameObjectは
+        /// シーン遷移で破棄されるため、この永続インスタンスとは別物になる。
+        /// </summary>
+        public static PhoneControllerServer GetOrCreate()
+        {
+            if (Instance != null) return Instance;
+            var go = new GameObject("PhoneControllerServer(Persistent)");
+            return go.AddComponent<PhoneControllerServer>();
+        }
 
         public event Action<float, float, float> OnOrientation;
         public event Action OnReload;
@@ -49,6 +71,16 @@ namespace PocketBlaster.Networking
 
         private void Awake()
         {
+            if (Instance != null && Instance != this)
+            {
+                // 万が一2個目が作られても(例えば旧シーンの生成コードが残っていた場合)、
+                // 新しい方を即座に破棄して既存の接続を保持する。
+                Destroy(gameObject);
+                return;
+            }
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+
             var projectRoot = Path.Combine(Application.dataPath, "..");
             X509Certificate2 certificate;
             try
@@ -109,6 +141,7 @@ namespace PocketBlaster.Networking
 
         private void OnDestroy()
         {
+            if (Instance == this) Instance = null;
             _server?.Stop();
             _certificateDownloadServer?.Stop();
         }

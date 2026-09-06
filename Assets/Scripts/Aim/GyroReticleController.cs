@@ -36,7 +36,6 @@ namespace PocketBlaster.Aim
     /// 画面を出して、プレイヤーが実際にそう構えた上で操作するのを待つ。ボタンを押す動作の
     /// 最中の不安定な向きがそのまま基準になってしまう問題を避けるため。
     /// </summary>
-    [RequireComponent(typeof(PhoneControllerServer))]
     [RequireComponent(typeof(AudioSource))]
     public class GyroReticleController : MonoBehaviour
     {
@@ -114,7 +113,9 @@ namespace PocketBlaster.Aim
 
         private void Awake()
         {
-            _server = GetComponent<PhoneControllerServer>();
+            // GetComponentではなくGetOrCreate() — PhoneControllerServerはシーンをまたぐ
+            // 永続シングルトンにしてある(2026-09-06、再挑戦での接続断対応。同ファイル参照)。
+            _server = PhoneControllerServer.GetOrCreate();
             _ammo = new AmmoState(magazineSize);
             _server.OnReload += HandleReload;
             _server.OnShoot += HandleShoot;

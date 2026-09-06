@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using PocketBlaster.Meta;
+using PocketBlaster.Networking;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
@@ -7,13 +10,23 @@ namespace PocketBlaster.UI
 {
     /// <summary>
     /// 起動画面(オーナー要望、2026-09-06:「起動画面を実装して。そこから難易度選択や
-    /// 設定などができるようにして」)。PhoneControllerServerを持たない、PC上の
-    /// マウス操作だけで完結する画面 — スマホをまだつながなくても難易度・感度・SE音量を
-    /// 選べる。選んだ内容はGameSettings(PlayerPrefs)へ保存し、遷移先のステージシーンが
-    /// Awakeで読み取る(GameSession・GyroReticleController参照)。
+    /// 設定などができるようにして」)。PC上のマウス操作だけで完結する画面 —
+    /// スマホをまだつながなくても難易度・感度・SE音量を選べる。選んだ内容は
+    /// GameSettings(PlayerPrefs)へ保存し、遷移先のステージシーンがAwakeで読み取る
+    /// (GameSession・GyroReticleController参照)。
     ///
     /// 難易度モードはこれまでスマホ側(webapp/index.html)の接続直後のラジオボタンで
     /// 選んでいたが、起動画面の新設に伴いこちらへ一本化した(重複した選択UIを持たない)。
+    ///
+    /// スマホからの「狙って撃つ」操作でもこの画面を操作できる(オーナー要望、2026-09-06:
+    /// 「起動画面についてもスマホから狙って撃つアクションで操作できるようにしてください」)。
+    /// ゲームプレイ中のGyroReticleControllerと同じ仕組み(ジャイロの基準からの角度差分を
+    /// 画面座標へ変換)を、ボタン用に簡略化してここに持たせている
+    /// (専用の`_clickTargets`にボタンを登録し、"shoot"受信時にレティクル位置と
+    /// `VisualElement.worldBound`の当たり判定で押されたボタンを判定する — UI Toolkitの
+    /// Button.clickedは外部から発火できないイベントのため、この方式にした)。
+    /// キャリブレーションはゲームプレイ画面と同様「リロード」操作(webapp参照)で行うが、
+    /// このメニュー画面では低リスクなので明示的な案内画面は出さず、軽いヒント表示のみにした。
     /// </summary>
     public class TitleScreenController : MonoBehaviour
     {
@@ -32,15 +45,96 @@ namespace PocketBlaster.UI
         private Label _sfxVolumeLabel;
         private Label _sensitivityLabel;
 
+        private PhoneControllerServer _server;
+        private VisualElement _phoneReticle;
+        private Label _phoneHintLabel;
+        private bool _isPhoneCalibrated;
+        private float _refBeta;
+        private float _refGamma;
+        private float _cursorX;
+        private float _cursorY;
+        private readonly List<(VisualElement element, Action onActivate)> _clickTargets = new List<(VisualElement, Action)>();
+
         private void Awake()
         {
             BuildUi();
             RefreshModeButtons();
+
+            // GetOrCreate() — PhoneControllerServerはシーンをまたぐ永続シングルトン
+            // (PhoneControllerServer.cs参照)。起動画面が最初のシーンなら、ここで
+            // サーバーが生成されステージ遷移後もそのまま生き続ける。
+            _server = PhoneControllerServer.GetOrCreate();
+            _server.OnReload += HandlePhoneCalibrate;
+            _server.OnShoot += HandlePhoneShoot;
         }
 
         private void OnDestroy()
         {
+            if (_server != null)
+            {
+                _server.OnReload -= HandlePhoneCalibrate;
+                _server.OnShoot -= HandlePhoneShoot;
+            }
             if (_panelSettings != null) Destroy(_panelSettings);
+        }
+
+        private void Update()
+        {
+            if (_server == null) return;
+
+            if (!_server.IsConnected)
+            {
+                _phoneReticle.style.display = DisplayStyle.None;
+                _phoneHintLabel.text = "（スマホ未接続 — 接続すると狙って撃つ操作でも選べます）";
+                return;
+            }
+
+            if (!_isPhoneCalibrated)
+            {
+                _phoneReticle.style.display = DisplayStyle.None;
+                _phoneHintLabel.text = "スマホ接続済み — 画面中央に向けて「リロード」を押すと狙えるようになります";
+                return;
+            }
+
+            _phoneHintLabel.text = "スマホでの狙い: 有効（「撃つ」でボタンを選択）";
+
+            var betaDelta = Mathf.DeltaAngle(_refBeta, _server.LatestBeta);
+            var gammaDelta = Mathf.DeltaAngle(_refGamma, _server.LatestGamma);
+            var degreesToScreenPixels = GameSettings.Current.Sensitivity;
+
+            _cursorX = Mathf.Clamp(Screen.width / 2f + gammaDelta * degreesToScreenPixels, 0, Screen.width);
+            _cursorY = Mathf.Clamp(Screen.height / 2f + betaDelta * degreesToScreenPixels, 0, Screen.height);
+
+            _phoneReticle.style.display = DisplayStyle.Flex;
+            _phoneReticle.style.left = _cursorX - _phoneReticle.resolvedStyle.width / 2f;
+            _phoneReticle.style.top = _cursorY - _phoneReticle.resolvedStyle.height / 2f;
+        }
+
+        private void HandlePhoneCalibrate()
+        {
+            _refBeta = _server.LatestBeta;
+            _refGamma = _server.LatestGamma;
+            _isPhoneCalibrated = true;
+        }
+
+        private void HandlePhoneShoot()
+        {
+            if (!_isPhoneCalibrated) return;
+
+            var point = new Vector2(_cursorX, _cursorY);
+            foreach (var (element, onActivate) in _clickTargets)
+            {
+                if (element.worldBound.Contains(point))
+                {
+                    onActivate();
+                    return;
+                }
+            }
+        }
+
+        private void RegisterClickTarget(VisualElement element, Action onActivate)
+        {
+            _clickTargets.Add((element, onActivate));
         }
 
         private void SelectMode(bool isArcade)
@@ -104,6 +198,8 @@ namespace PocketBlaster.UI
             modeRow.style.marginBottom = 20;
             _casualButton = BuildOptionButton("カジュアル（無制限）", () => SelectMode(false));
             _arcadeButton = BuildOptionButton("アーケード（残機制）", () => SelectMode(true));
+            RegisterClickTarget(_casualButton, () => SelectMode(false));
+            RegisterClickTarget(_arcadeButton, () => SelectMode(true));
             _casualButton.style.marginRight = 8;
             modeRow.Add(_casualButton);
             modeRow.Add(_arcadeButton);
@@ -140,9 +236,40 @@ namespace PocketBlaster.UI
             panel.Add(BuildSectionLabel("ステージを選んでスタート"));
             var stage1Button = BuildStartButton(stage1DisplayName, () => StartStage(stage1SceneName));
             stage1Button.style.marginBottom = 8;
+            RegisterClickTarget(stage1Button, () => StartStage(stage1SceneName));
             panel.Add(stage1Button);
             var stage2Button = BuildStartButton(stage2DisplayName, () => StartStage(stage2SceneName));
+            RegisterClickTarget(stage2Button, () => StartStage(stage2SceneName));
             panel.Add(stage2Button);
+
+            // スマホでの狙い操作用の状態表示とレティクル(root直下、パネルの外)。
+            _phoneHintLabel = new Label();
+            _phoneHintLabel.style.color = new Color(0.7f, 0.75f, 0.85f);
+            _phoneHintLabel.style.fontSize = 13;
+            _phoneHintLabel.style.marginTop = 16;
+            _phoneHintLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            RuntimeLabelStyle.ApplyDefaultFont(_phoneHintLabel);
+            panel.Add(_phoneHintLabel);
+
+            _phoneReticle = new VisualElement();
+            _phoneReticle.style.display = DisplayStyle.None;
+            _phoneReticle.style.position = Position.Absolute;
+            _phoneReticle.style.width = 30;
+            _phoneReticle.style.height = 30;
+            _phoneReticle.style.borderTopLeftRadius = 15;
+            _phoneReticle.style.borderTopRightRadius = 15;
+            _phoneReticle.style.borderBottomLeftRadius = 15;
+            _phoneReticle.style.borderBottomRightRadius = 15;
+            _phoneReticle.style.borderLeftWidth = 3;
+            _phoneReticle.style.borderRightWidth = 3;
+            _phoneReticle.style.borderTopWidth = 3;
+            _phoneReticle.style.borderBottomWidth = 3;
+            var phoneReticleColor = new Color(0.3f, 0.9f, 1f, 0.9f);
+            _phoneReticle.style.borderLeftColor = phoneReticleColor;
+            _phoneReticle.style.borderRightColor = phoneReticleColor;
+            _phoneReticle.style.borderTopColor = phoneReticleColor;
+            _phoneReticle.style.borderBottomColor = phoneReticleColor;
+            root.Add(_phoneReticle);
         }
 
         private void UpdateSfxVolumeLabel()

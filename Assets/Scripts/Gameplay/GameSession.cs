@@ -25,7 +25,6 @@ namespace PocketBlaster.Gameplay
     /// timeScaleの影響を受けないため、GyroReticleControllerを明示的に無効化する。
     /// 再挑戦はシーンを丸ごとリロードする(スコア・残機・ウェーブ進行がすべて初期化される)。
     /// </summary>
-    [RequireComponent(typeof(PhoneControllerServer))]
     public class GameSession : MonoBehaviour
     {
         public enum Mode
@@ -54,7 +53,10 @@ namespace PocketBlaster.Gameplay
 
         private void Awake()
         {
-            _server = GetComponent<PhoneControllerServer>();
+            // GetComponentではなくGetOrCreate() — PhoneControllerServerはシーンをまたぐ
+            // 永続シングルトンにしてある(2026-09-06、オーナー報告「再挑戦すると、スマホとの
+            // 接続が切れてしまいました」への対応。PhoneControllerServer.cs参照)。
+            _server = PhoneControllerServer.GetOrCreate();
             if (reticleController == null) reticleController = GetComponent<GyroReticleController>();
             if (stageDirector == null) stageDirector = FindFirstObjectByType<StageDirector>();
 

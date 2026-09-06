@@ -1,6 +1,5 @@
 using System.IO;
 using PocketBlaster.Aim;
-using PocketBlaster.Networking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -30,7 +29,9 @@ namespace PocketBlaster.EditorTools
             cameraGo.AddComponent<AudioListener>();
 
             var rigGo = new GameObject("GyroAimTestRig");
-            rigGo.AddComponent<PhoneControllerServer>();
+            // PhoneControllerServerはシーンに直接置かない — 永続シングルトンとして
+            // GyroReticleController.Awake()がGetOrCreate()で取得/生成する
+            // (2026-09-06、再挑戦での接続断対応。PhoneControllerServer.cs参照)。
             rigGo.AddComponent<GyroReticleController>();
 
             var dir = Path.GetDirectoryName(ScenePath);

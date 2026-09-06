@@ -1,7 +1,6 @@
 using System.IO;
 using PocketBlaster.Aim;
 using PocketBlaster.Gameplay;
-using PocketBlaster.Networking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -47,7 +46,8 @@ namespace PocketBlaster.EditorTools
                 juiceColor: new Color(0.9f, 0.15f, 0.1f), scale: 2f, respawns: true);
 
             var rigGo = new GameObject("GyroAimTestRig");
-            rigGo.AddComponent<PhoneControllerServer>();
+            // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。
+            // Milestone1SceneBuilder.cs参照。
             var reticleController = rigGo.AddComponent<GyroReticleController>();
             var locomotion = rigGo.AddComponent<PlayerLocomotion>();
             var locomotionSo = new SerializedObject(locomotion);

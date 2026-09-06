@@ -20,7 +20,6 @@ namespace PocketBlaster.Gameplay
     /// 指定する — 親(Rigのウェーブ間Lerp)と子(このステップ移動)が同じTransformの
     /// 同じプロパティを取り合わないようにするため。
     /// </summary>
-    [RequireComponent(typeof(PhoneControllerServer))]
     public class PlayerLocomotion : MonoBehaviour
     {
         [SerializeField] private Transform movableRoot;
@@ -33,7 +32,9 @@ namespace PocketBlaster.Gameplay
 
         private void Awake()
         {
-            _server = GetComponent<PhoneControllerServer>();
+            // GetComponentではなくGetOrCreate() — PhoneControllerServerはシーンをまたぐ
+            // 永続シングルトン(2026-09-06、再挑戦での接続断対応。PhoneControllerServer.cs参照)。
+            _server = PhoneControllerServer.GetOrCreate();
             if (movableRoot == null) movableRoot = transform;
             if (aimSource == null) aimSource = GetComponent<GyroReticleController>();
 

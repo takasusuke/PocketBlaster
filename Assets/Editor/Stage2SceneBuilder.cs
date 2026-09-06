@@ -1,7 +1,6 @@
 using System.IO;
 using PocketBlaster.Aim;
 using PocketBlaster.Gameplay;
-using PocketBlaster.Networking;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -103,7 +102,8 @@ namespace PocketBlaster.EditorTools
             var wave4Enemies = new[] { bossEnemy };
 
             var rigGo = new GameObject("GyroAimTestRig");
-            rigGo.AddComponent<PhoneControllerServer>();
+            // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。
+            // Milestone1SceneBuilder.cs参照。
             var reticleController = rigGo.AddComponent<GyroReticleController>();
             var locomotion = rigGo.AddComponent<PlayerLocomotion>();
             var locomotionSo = new SerializedObject(locomotion);

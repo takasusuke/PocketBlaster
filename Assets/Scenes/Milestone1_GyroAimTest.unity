@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1201992566
+--- !u!1 &1702202101
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,9 +127,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1201992569}
-  - component: {fileID: 1201992568}
-  - component: {fileID: 1201992567}
+  - component: {fileID: 1702202104}
+  - component: {fileID: 1702202103}
+  - component: {fileID: 1702202102}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -137,21 +137,21 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!81 &1201992567
+--- !u!81 &1702202102
 AudioListener:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1201992566}
+  m_GameObject: {fileID: 1702202101}
   m_Enabled: 1
---- !u!20 &1201992568
+--- !u!20 &1702202103
 Camera:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1201992566}
+  m_GameObject: {fileID: 1702202101}
   m_Enabled: 1
   serializedVersion: 2
   m_ClearFlags: 2
@@ -196,13 +196,13 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
---- !u!4 &1201992569
+--- !u!4 &1702202104
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1201992566}
+  m_GameObject: {fileID: 1702202101}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -211,7 +211,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1446772328
+--- !u!1 &1990105764
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -219,10 +219,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1446772332}
-  - component: {fileID: 1446772331}
-  - component: {fileID: 1446772330}
-  - component: {fileID: 1446772329}
+  - component: {fileID: 1990105767}
+  - component: {fileID: 1990105766}
+  - component: {fileID: 1990105765}
   m_Layer: 0
   m_Name: GyroAimTestRig
   m_TagString: Untagged
@@ -230,13 +229,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1446772329
+--- !u!114 &1990105765
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1446772328}
+  m_GameObject: {fileID: 1990105764}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0a78b780d177b9e40b2bd26425a12f64, type: 3}
@@ -244,18 +243,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: PocketBlaster.Runtime::PocketBlaster.Aim.GyroReticleController
   degreesToScreenPixels: 12
   magazineSize: 6
+  reloadDurationSeconds: 0.6
   aimCamera: {fileID: 0}
   hitLayerMask:
     serializedVersion: 2
     m_Bits: 4294967295
   maxHitDistance: 1000
---- !u!82 &1446772330
+  enableMouseDebugAim: 1
+--- !u!82 &1990105766
 AudioSource:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1446772328}
+  m_GameObject: {fileID: 1990105764}
   m_Enabled: 1
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
@@ -346,27 +347,13 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
---- !u!114 &1446772331
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1446772328}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7e7891bd98728754db56130fb7e12aaa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: PocketBlaster.Runtime::PocketBlaster.Networking.PhoneControllerServer
-  port: 7777
-  certificatePort: 7778
---- !u!4 &1446772332
+--- !u!4 &1990105767
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1446772328}
+  m_GameObject: {fileID: 1990105764}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -379,5 +366,5 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1201992569}
-  - {fileID: 1446772332}
+  - {fileID: 1702202104}
+  - {fileID: 1990105767}
