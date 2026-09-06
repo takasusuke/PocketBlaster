@@ -27,6 +27,36 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
    （「ダブルクリックでシーンが開く」という一般的な理解は、少なくともこの起動経路
    （`Start-Process`での直接起動）には当てはまらなかった）
 
+## 演出強化: 加点ポップアップ・被弾時の色変化・ダメージ演出・総合評価（2026-09-06、実装済み・未検証）
+
+オーナー要望4件に対応。
+
+1. **敵を倒した時の加点表示**: `ScorePopupEffect.SpawnAt`（実体は`ScorePopupBehaviour`）を
+   `StageDirector.HandleEnemyDefeated`から呼び、倒した場所に「+100」等を1秒かけて
+   浮かび上がらせながらフェードアウトする。ワールド座標を`Camera.WorldToScreenPoint`で
+   毎フレーム変換しているので、カメラがウェーブ間で動いても追従する。
+2. **複数回被弾する敵の色変化**: `Target.cs`に`damagedColor`（既定は暗い赤）を追加。
+   `TargetHitState.MaxHitPoints`（新規公開）と`RemainingHitPoints`の比率から、
+   Idle時の色を基本色→damagedColorへ徐々に寄せる。1発で倒れる通常の敵は
+   `MaxHitPoints`が常に1なので変化なし（ボス等の多段ヒット敵だけに効く）。
+   既存の被弾直後の白フラッシュ（`hitFlashColor`）はそのまま残り、フラッシュが
+   収まった後に「今どれだけ削れているか」が色でわかるようになる。
+3. **被弾時のダメージ演出**: `GameSession.LoseLifeIfArcade`で残機が減るたびに、
+   画面全体を覆う`_damageFlash`(VisualElement)を赤くフラッシュさせ0.4秒かけて
+   フェードアウトする（`pickingMode = PickingMode.Ignore`でクリック判定は奪わない）。
+4. **総合評価(A〜E)・高揚感演出**: 純粋なC#クラス`ScoreGrade.Compute(score,
+   maxPossibleScore)`（EditModeテスト`ScoreGradeTests.cs`あり）でステージクリア時の
+   達成率から評価を出す（達成率はそのステージの全敵`PointValue`合計に対する比率、
+   90%以上A・75%以上B・60%以上C・40%以上D・それ未満E）。`StageDirector.ShowStageClear`が
+   評価に応じた色（A=ゴールド、B=水色、C=白、D=オレンジ、E=赤）で画面中央に大きく
+   表示し、弾むような拡大アニメーションで登場させる。A・Bの高評価では
+   `CelebrationEffect`（複数色を経由する紙吹雪風パーティクル）も追加で再生する。
+
+**未検証**: 4項目とも実装のみで、Play Modeで実際に見た目・タイミング・派手さの
+バランスを確認したのはまだ誰もいない。特にポップアップの表示位置（カメラ追従）・
+被弾時の赤フラッシュの強さ・評価画面の演出量が「高揚感」として狙い通りかは
+実際に遊んで判断が必要。
+
 ## 起動画面（2026-09-06、実装済み・未検証）
 
 「起動画面を実装して。そこから難易度選択や設定などができるようにして」（オーナー要望）。

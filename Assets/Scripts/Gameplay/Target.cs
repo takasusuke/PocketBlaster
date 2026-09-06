@@ -21,6 +21,7 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private float knockDurationSeconds = 0.25f;
         [SerializeField] private float downDurationSeconds = 1.2f;
         [SerializeField] private Color hitFlashColor = Color.white;
+        [SerializeField] private Color damagedColor = new Color(0.55f, 0.12f, 0.12f);
         [SerializeField] private float knockbackAngleDegrees = 70f;
         [SerializeField] private bool respawnsAfterDefeat = true;
         [SerializeField] private Color juiceColor = Color.red;
@@ -89,7 +90,7 @@ namespace PocketBlaster.Gameplay
             switch (_state.CurrentPhase)
             {
                 case TargetHitState.Phase.Idle:
-                    _renderer.material.color = _baseColor;
+                    _renderer.material.color = IdleColor();
                     _visual.localRotation = _baseRotation;
                     break;
                 case TargetHitState.Phase.Flash:
@@ -107,6 +108,19 @@ namespace PocketBlaster.Gameplay
                     _visual.localRotation = Quaternion.Slerp(_knockedRotation, _baseRotation, _state.PhaseProgress01);
                     break;
             }
+        }
+
+        /// <summary>
+        /// 複数回被弾する敵(ボス等、hitPoints&gt;1)は、削れた体力の割合に応じて
+        /// 基本色からdamagedColorへ寄っていく(オーナー要望2026-09-06:「複数回弾を
+        /// 当てる必要のある敵は、被弾時に色が変わるアニメーションを追加して」)。
+        /// 1発で倒れる通常の敵はMaxHitPoints=1なので常に基本色のまま(変化なし)。
+        /// </summary>
+        private Color IdleColor()
+        {
+            if (_state.MaxHitPoints <= 1) return _baseColor;
+            var damageRatio = 1f - (_state.RemainingHitPoints / (float)_state.MaxHitPoints);
+            return Color.Lerp(_baseColor, damagedColor, damageRatio);
         }
     }
 }

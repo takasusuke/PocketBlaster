@@ -92,6 +92,18 @@ namespace PocketBlaster.Tests.EditMode
         }
 
         [Test]
+        public void MaxHitPointsStaysConstantWhileRemainingDecreases()
+        {
+            var state = new TargetHitState(0.1f, 0.2f, 0.3f, respawns: false, hitPoints: 3);
+            Assert.AreEqual(3, state.MaxHitPoints);
+
+            state.TryHit();
+            state.Tick(0.1f);
+            Assert.AreEqual(3, state.MaxHitPoints, "MaxHitPointsは被弾しても変わらない");
+            Assert.AreEqual(2, state.RemainingHitPoints);
+        }
+
+        [Test]
         public void MultiHitTargetKnocksDownOnFinalHit()
         {
             var state = new TargetHitState(0.1f, 0.2f, 0.3f, respawns: false, hitPoints: 2);

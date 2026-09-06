@@ -52,10 +52,12 @@ namespace PocketBlaster.Gameplay
         private StageProgressState _progress;
         private ScoreState _score;
         private string _highScorePrefsKey;
+        private int _maxPossibleScore;
         private UIDocument _uiDocument;
         private PanelSettings _panelSettings;
         private Label _waveLabel;
         private Label _scoreLabel;
+        private Label _gradeLabel;
 
         private void Awake()
         {
@@ -72,6 +74,7 @@ namespace PocketBlaster.Gameplay
                 foreach (var enemy in waves[i].enemies)
                 {
                     enemy.gameObject.SetActive(false);
+                    _maxPossibleScore += enemy.PointValue;
                 }
             }
             _progress = new StageProgressState(enemyCounts);
@@ -109,6 +112,9 @@ namespace PocketBlaster.Gameplay
         private void HandleEnemyDefeated(Target defeatedTarget)
         {
             _score.AddPoints(defeatedTarget.PointValue);
+            // 倒した場所にその場で加点を表示する(オーナー要望2026-09-06:
+            // 「敵を倒した時にスコアを表示するようにしてください」)。
+            ScorePopupEffect.SpawnAt(defeatedTarget.transform.position, defeatedTarget.PointValue, stageCamera);
             AdvanceWaveState();
         }
 
@@ -175,6 +181,58 @@ namespace PocketBlaster.Gameplay
                 ? $"ハイスコア更新！ {_score.TotalScore}"
                 : $"スコア: {_score.TotalScore}（ハイスコア: {previousHighScore}）";
             _waveLabel.text = $"ステージクリア！\n{highScoreLine}";
+
+            ShowGrade(ScoreGrade.Compute(_score.TotalScore, _maxPossibleScore));
+        }
+
+        /// <summary>
+        /// 総合評価(A〜E)の表示(オーナー要望2026-09-06:「スコア画面にAからEの総合評価を
+        /// 表示するなど、高揚感の高まる演出、色にして」)。評価に応じて色を変え、弾むような
+        /// 拡大アニメーションで登場させる。A・Bはさらに紙吹雪演出を足す。
+        /// </summary>
+        private void ShowGrade(char grade)
+        {
+            _gradeLabel.text = grade.ToString();
+            _gradeLabel.style.color = GradeColor(grade);
+            _gradeLabel.style.display = DisplayStyle.Flex;
+            StartCoroutine(GradePopRoutine());
+
+            if (grade == 'A' || grade == 'B')
+            {
+                var spawnPosition = stageCamera.transform.position + stageCamera.transform.forward * 3f;
+                CelebrationEffect.SpawnAt(spawnPosition);
+            }
+        }
+
+        private static Color GradeColor(char grade)
+        {
+            switch (grade)
+            {
+                case 'A': return new Color(1f, 0.85f, 0.2f); // ゴールド
+                case 'B': return new Color(0.6f, 0.85f, 1f); // シルバーがかった水色
+                case 'C': return Color.white;
+                case 'D': return new Color(1f, 0.6f, 0.3f);
+                default: return new Color(1f, 0.35f, 0.35f); // E
+            }
+        }
+
+        private IEnumerator GradePopRoutine()
+        {
+            const float duration = 0.45f;
+            const float overshootUntil = 0.7f;
+            var t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                var p = Mathf.Clamp01(t / duration);
+                // 0→1.15倍→1.0倍と弾むように登場させる。
+                var scale = p < overshootUntil
+                    ? Mathf.Lerp(0.2f, 1.15f, p / overshootUntil)
+                    : Mathf.Lerp(1.15f, 1f, (p - overshootUntil) / (1f - overshootUntil));
+                _gradeLabel.style.scale = new Scale(new Vector3(scale, scale, 1f));
+                yield return null;
+            }
+            _gradeLabel.style.scale = new Scale(Vector3.one);
         }
 
         private void BuildUi()
@@ -218,6 +276,19 @@ namespace PocketBlaster.Gameplay
             _scoreLabel.style.unityTextAlign = TextAnchor.UpperCenter;
             RuntimeLabelStyle.ApplyDefaultFont(_scoreLabel);
             _uiDocument.rootVisualElement.Add(_scoreLabel);
+
+            // 総合評価(A〜E)。ステージクリアまでは非表示、画面中央に大きく出す。
+            _gradeLabel = new Label();
+            _gradeLabel.style.display = DisplayStyle.None;
+            _gradeLabel.style.position = Position.Absolute;
+            _gradeLabel.style.top = Length.Percent(30);
+            _gradeLabel.style.left = 0;
+            _gradeLabel.style.right = 0;
+            _gradeLabel.style.fontSize = 160;
+            _gradeLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _gradeLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            RuntimeLabelStyle.ApplyDefaultFont(_gradeLabel);
+            _uiDocument.rootVisualElement.Add(_gradeLabel);
         }
 
         private void OnDestroy()

@@ -31,6 +31,7 @@ namespace PocketBlaster.Gameplay
         private readonly float _knockDuration;
         private readonly float _downDuration;
         private readonly bool _respawns;
+        private readonly int _maxHitPoints;
         private int _remainingHitPoints;
         private bool _pendingFatalHit;
         private float _elapsedInPhase;
@@ -38,6 +39,12 @@ namespace PocketBlaster.Gameplay
         public Phase CurrentPhase { get; private set; } = Phase.Idle;
         public bool IsHittable => CurrentPhase == Phase.Idle;
         public int RemainingHitPoints => _remainingHitPoints;
+        /// <summary>
+        /// 生成時に渡された最大被弾回数。Target(見た目側)が「どれだけ削れたか」の比率
+        /// (1 - RemainingHitPoints/MaxHitPoints)を出すのに使う(被弾での色変化、
+        /// オーナー要望2026-09-06)。
+        /// </summary>
+        public int MaxHitPoints => _maxHitPoints;
 
         /// <summary>現在のフェーズ内での進捗(0〜1)。KnockDown/RecoverUpの角度補間に使う。</summary>
         public float PhaseProgress01
@@ -62,7 +69,8 @@ namespace PocketBlaster.Gameplay
             _knockDuration = knockDuration;
             _downDuration = downDuration;
             _respawns = respawns;
-            _remainingHitPoints = hitPoints > 0 ? hitPoints : 1;
+            _maxHitPoints = hitPoints > 0 ? hitPoints : 1;
+            _remainingHitPoints = _maxHitPoints;
         }
 
         /// <returns>実際にヒット処理を開始できたか(反応中の二重ヒットは無視してfalse)</returns>

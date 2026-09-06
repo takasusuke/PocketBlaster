@@ -1,3 +1,4 @@
+using System.Collections;
 using PocketBlaster.Aim;
 using PocketBlaster.Meta;
 using PocketBlaster.Networking;
@@ -48,6 +49,8 @@ namespace PocketBlaster.Gameplay
         private PanelSettings _panelSettings;
         private Label _sessionLabel;
         private Label _pauseLabel;
+        private VisualElement _damageFlash;
+        private Coroutine _damageFlashRoutine;
 
         private void Awake()
         {
@@ -115,6 +118,7 @@ namespace PocketBlaster.Gameplay
             if (_mode != Mode.Arcade || _isGameOver) return;
 
             var isGameOverNow = _lives.LoseLife();
+            TriggerDamageFlash();
             if (isGameOverNow)
             {
                 _isGameOver = true;
@@ -122,6 +126,31 @@ namespace PocketBlaster.Gameplay
                 if (reticleController != null) reticleController.enabled = false;
             }
             UpdateLabel();
+        }
+
+        /// <summary>
+        /// ダメージを受けたことを画面全体の赤い明滅で伝える(オーナー要望2026-09-06:
+        /// 「ダメージをくらったときのアニメーションを追加して」)。
+        /// </summary>
+        private void TriggerDamageFlash()
+        {
+            if (_damageFlashRoutine != null) StopCoroutine(_damageFlashRoutine);
+            _damageFlashRoutine = StartCoroutine(DamageFlashRoutine());
+        }
+
+        private IEnumerator DamageFlashRoutine()
+        {
+            const float duration = 0.4f;
+            var t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                var alpha = Mathf.Lerp(0.5f, 0f, t / duration);
+                _damageFlash.style.backgroundColor = new Color(1f, 0f, 0f, alpha);
+                yield return null;
+            }
+            _damageFlash.style.backgroundColor = new Color(1f, 0f, 0f, 0f);
+            _damageFlashRoutine = null;
         }
 
         private void UpdateLabel()
@@ -176,6 +205,16 @@ namespace PocketBlaster.Gameplay
             _pauseLabel.style.borderBottomRightRadius = 12;
             RuntimeLabelStyle.ApplyDefaultFont(_pauseLabel);
             _uiDocument.rootVisualElement.Add(_pauseLabel);
+
+            _damageFlash = new VisualElement();
+            _damageFlash.style.position = Position.Absolute;
+            _damageFlash.style.left = 0;
+            _damageFlash.style.right = 0;
+            _damageFlash.style.top = 0;
+            _damageFlash.style.bottom = 0;
+            _damageFlash.style.backgroundColor = new Color(1f, 0f, 0f, 0f);
+            _damageFlash.pickingMode = PickingMode.Ignore; // クリック判定を奪わない(マウスデバッグ等に影響しないように)
+            _uiDocument.rootVisualElement.Add(_damageFlash);
         }
     }
 }
