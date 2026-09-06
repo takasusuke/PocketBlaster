@@ -108,6 +108,16 @@ namespace PocketBlaster.EditorTools
                 EnemyFactory.CreateVegetableZombie("Wave5_PumpkinBoss", new Vector3(0f, 2f, 22f), EnemyFactory.VegetableKind.PumpkinBoss, pumpkinSprite, PumpkinJuice, bossScale, respawns: false, approaches: true),
             };
 
+            // フィールドの障害物(オーナー要望、2026-09-06:「フィールドの構築が必要です。
+            // オブジェクトを配置したり...パルクールをして上ったり」)。低い箱(高さ0.4、
+            // PlayerLocomotion.stepUpHeight=0.6以下)は自動で乗り越えられ、高い壁(高さ1.6)は
+            // 通れない。まずは最初の3ウェーブぶんだけ試作として置く(その後の調整で
+            // 増減・配置を見直す前提)。
+            ObstacleFactory.CreateBox("Obstacle_Wave1_LowBox", new Vector3(-2f, 0f, 3f), 0.6f, 0.4f, new Color(0.6f, 0.45f, 0.3f));
+            ObstacleFactory.CreateBox("Obstacle_Wave1_Wall", new Vector3(2.5f, 0f, 4f), 0.5f, 1.6f, new Color(0.4f, 0.4f, 0.45f));
+            ObstacleFactory.CreateBox("Obstacle_Wave2_LowBox", new Vector3(1.5f, 0f, 4f), 0.6f, 0.4f, new Color(0.6f, 0.45f, 0.3f));
+            ObstacleFactory.CreateBox("Obstacle_Wave3_LowBox", new Vector3(-1.5f, 0f, 5f), 0.6f, 0.4f, new Color(0.6f, 0.45f, 0.3f));
+
             var rigGo = new GameObject("GyroAimTestRig");
             // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。
             // Milestone1SceneBuilder.cs参照。

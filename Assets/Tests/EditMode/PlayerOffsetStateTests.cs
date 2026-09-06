@@ -62,5 +62,33 @@ namespace PocketBlaster.Tests.EditMode
             state.Reset();
             Assert.AreEqual(Vector3.zero, state.Offset);
         }
+
+        [Test]
+        public void ComputeStepResultDoesNotMutateState()
+        {
+            var state = new PlayerOffsetState(10f);
+            var previewed = state.ComputeStepResult(Vector3.forward, 1f);
+            Assert.Greater(previewed.magnitude, 0f);
+            Assert.AreEqual(Vector3.zero, state.Offset, "ComputeStepResultは内部状態を変えないこと");
+        }
+
+        [Test]
+        public void ComputeStepResultMatchesSubsequentStep()
+        {
+            var state = new PlayerOffsetState(10f);
+            var previewed = state.ComputeStepResult(Vector3.forward, 1f);
+            var stepped = state.Step(Vector3.forward, 1f);
+            Assert.AreEqual(previewed, stepped, "試算と実際のStepは同じ結果になること");
+        }
+
+        [Test]
+        public void SetOffsetOverridesCurrentOffsetDirectly()
+        {
+            var state = new PlayerOffsetState(10f);
+            state.Step(Vector3.forward, 1f);
+            var target = new Vector3(3f, 0f, 4f);
+            state.SetOffset(target);
+            Assert.AreEqual(target, state.Offset);
+        }
     }
 }

@@ -19,11 +19,17 @@ namespace PocketBlaster.Gameplay
     /// 足踏み("step"メッセージ)での小さな踏み込みは、構えている間だけ引き続き有効
     /// (狙いを定めたまま横に避ける、という元の用途に残す)。
     ///
+    /// フィールドの障害物・パルクール(オーナー要望、2026-09-06:「フィールドの構築が
+    /// 必要です。オブジェクトを配置したり、小さなオブジェクトに対して...パルクールを
+    /// して上ったり」)に対応する。移動先が<see cref="Obstacle"/>と重なる場合、
+    /// その高さが`stepUpHeight`以下なら自動的に「乗り越え」(見た目の高さだけ上げる)、
+    /// それより高ければ移動そのものをブロックする(ObstacleCrossing参照)。
+    /// 物理エンジン(CharacterController等)には頼らない割り切った実装。
+    ///
     /// このゲームは「オンレール式」が決定済み事項(docs/requirements.md §1)なので、
-    /// 自由に歩き回れるわけではなく、`movableRoot`の初期位置から`maxOffsetRadius`を
+    /// 大きなワープのような移動はできず、`movableRoot`の初期位置から`maxOffsetRadius`を
     /// 超えて離れられないようPlayerOffsetStateでクランプする — ウェーブ間の大きな移動は
-    /// 引き続きStageDirectorが担い、これはその場での移動・回避だけを担当する
-    /// (フィールド全体を自由に歩き回れるようにする拡張は別途検討)。
+    /// 引き続きStageDirectorが担う。
     ///
     /// `movableRoot`未指定時はこのGameObject自身を動かす。StageDirectorと共存する場合は、
     /// カメラをStageDirectorが動かす親(Rig)の子にし、`movableRoot`にカメラのTransformを
@@ -35,13 +41,15 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Transform movableRoot;
         [SerializeField] private GyroReticleController aimSource;
         [SerializeField] private float stepDistance = 0.3f;
-        [SerializeField] private float maxOffsetRadius = 2.5f;
+        [SerializeField] private float maxOffsetRadius = 9f;
         [SerializeField] private float moveSpeed = 1.4f;
         [SerializeField] private float moveTiltDeadzoneDegrees = 5f;
         [SerializeField] private float moveTiltMaxDegrees = 30f;
+        [SerializeField] private float stepUpHeight = 0.6f;
 
         private PhoneControllerServer _server;
         private PlayerOffsetState _offsetState;
+        private Obstacle[] _obstacles;
         private bool _wasAiming = true;
         private float _moveRefBeta;
         private float _moveRefGamma;
@@ -55,6 +63,7 @@ namespace PocketBlaster.Gameplay
             if (aimSource == null) aimSource = GetComponent<GyroReticleController>();
 
             _offsetState = new PlayerOffsetState(maxOffsetRadius);
+            _obstacles = FindObjectsByType<Obstacle>(FindObjectsSortMode.None);
             _server.OnStep += HandleStep;
         }
 
@@ -91,7 +100,7 @@ namespace PocketBlaster.Gameplay
             right.Normalize();
 
             var direction = forward * forwardInput + right * sideInput;
-            ApplyOffset(_offsetState.Step(direction, moveSpeed * Time.deltaTime));
+            TryMoveTo(_offsetState.ComputeStepResult(direction, moveSpeed * Time.deltaTime));
         }
 
         /// <summary>傾き(度)を-1〜1の入力値へ変換する。不感帯以下は0、最大角以上は±1。</summary>
@@ -110,12 +119,42 @@ namespace PocketBlaster.Gameplay
             var aimRay = aimSource.GetAimRay();
             if (aimRay == null) return;
 
-            ApplyOffset(_offsetState.Step(aimRay.Value.direction, stepDistance));
+            TryMoveTo(_offsetState.ComputeStepResult(aimRay.Value.direction, stepDistance));
         }
 
-        private void ApplyOffset(Vector3 offset)
+        /// <summary>
+        /// 障害物を確認してから移動を確定する。乗り越えられる高さならその場だけ
+        /// プレイヤーの高さを上げ、乗り越えられない高さならこの移動そのものを
+        /// 諦めて現在位置に留まる(ObstacleCrossing参照)。
+        /// </summary>
+        private void TryMoveTo(Vector3 prospectiveOffset)
         {
-            movableRoot.localPosition = offset;
+            var blocking = FindOverlappingObstacle(prospectiveOffset);
+            var crossing = ObstacleCrossing.Evaluate(blocking != null, blocking != null ? blocking.Height : 0f, stepUpHeight);
+            if (crossing == ObstacleCrossingResult.Blocked) return;
+
+            _offsetState.SetOffset(prospectiveOffset);
+            var climbHeight = crossing == ObstacleCrossingResult.StepUp ? blocking.Height : 0f;
+            movableRoot.localPosition = new Vector3(prospectiveOffset.x, climbHeight, prospectiveOffset.z);
+        }
+
+        private Obstacle FindOverlappingObstacle(Vector3 prospectiveOffset)
+        {
+            if (_obstacles == null || _obstacles.Length == 0) return null;
+
+            var worldPos = movableRoot.parent != null
+                ? movableRoot.parent.TransformPoint(prospectiveOffset)
+                : prospectiveOffset;
+
+            foreach (var obstacle in _obstacles)
+            {
+                if (obstacle == null) continue;
+                var dx = worldPos.x - obstacle.Position.x;
+                var dz = worldPos.z - obstacle.Position.z;
+                var flatDistanceSqr = dx * dx + dz * dz;
+                if (flatDistanceSqr <= obstacle.Radius * obstacle.Radius) return obstacle;
+            }
+            return null;
         }
     }
 }

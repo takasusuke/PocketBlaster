@@ -352,6 +352,12 @@
   // 構えている間は照準を動かして、構えていない間は移動する」)。押している間だけ
   // "aim_start"、離したら"aim_end"を送る(Unity側はPhoneControllerServer.IsAiming参照)。
   // pointerイベントはマウス/タッチの両方を1本のAPIで扱える。
+  //
+  // 修正(2026-09-06、オーナー報告「構えている間に弾を撃つを押しても、弾が出ません」):
+  // 当初はpointerleaveでも構えを解除していたが、スマホを傾けながら押し続けると
+  // 指が画面上でわずかにボタンの外へずれてpointerleaveが発火し、「撃つ」を押す前に
+  // 構えが解除されてしまっていた。setPointerCapture()でこの指の入力をボタンに
+  // 固定し、要素の外に出てもpointerup/pointercancelまで構え続けるようにした。
   function startAiming() {
     if (aimBtn.disabled) return;
     sendMessage('aim_start');
@@ -361,10 +367,13 @@
     sendMessage('aim_end');
     aimBtn.classList.remove('active');
   }
-  aimBtn.addEventListener('pointerdown', function (e) { e.preventDefault(); startAiming(); });
+  aimBtn.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    try { aimBtn.setPointerCapture(e.pointerId); } catch (err) { /* 未対応環境でも無視して続行 */ }
+    startAiming();
+  });
   aimBtn.addEventListener('pointerup', stopAiming);
   aimBtn.addEventListener('pointercancel', stopAiming);
-  aimBtn.addEventListener('pointerleave', stopAiming);
 
   shootBtn.addEventListener('click', function () {
     sendMessage('shoot');
