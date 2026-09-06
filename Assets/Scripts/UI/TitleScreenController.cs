@@ -45,6 +45,7 @@ namespace PocketBlaster.UI
         private Label _sfxVolumeLabel;
         private Label _verticalSensitivityLabel;
         private Label _horizontalSensitivityLabel;
+        private Label _lookSensitivityLabel;
 
         private PhoneControllerServer _server;
         private VisualElement _phoneReticle;
@@ -242,7 +243,7 @@ namespace PocketBlaster.UI
             {
                 value = GameSettings.Current.HorizontalSensitivity
             };
-            horizontalSlider.style.marginBottom = 24;
+            horizontalSlider.style.marginBottom = 16;
             horizontalSlider.RegisterValueChangedCallback(evt =>
             {
                 GameSettings.SetHorizontalSensitivity(evt.newValue);
@@ -250,6 +251,25 @@ namespace PocketBlaster.UI
             });
             panel.Add(horizontalSlider);
             UpdateHorizontalSensitivityLabel();
+
+            // 「構えていない間」(視界の回転、PlayerLocomotion参照)の感度は、狙いの
+            // 感度とは単位も意味も違う(角度→ピクセルではなく角度→回転の角速度)ため
+            // 別の設定にしてある(オーナー要望、2026-09-06:「構えるときの感度と、
+            // 構えていない時の感度はそれぞれ調整できるようにして下さい」)。
+            _lookSensitivityLabel = BuildValueLabel();
+            panel.Add(_lookSensitivityLabel);
+            var lookSlider = new Slider(GameSettingsState.MinLookSensitivity, GameSettingsState.MaxLookSensitivity)
+            {
+                value = GameSettings.Current.LookSensitivity
+            };
+            lookSlider.style.marginBottom = 24;
+            lookSlider.RegisterValueChangedCallback(evt =>
+            {
+                GameSettings.SetLookSensitivity(evt.newValue);
+                UpdateLookSensitivityLabel();
+            });
+            panel.Add(lookSlider);
+            UpdateLookSensitivityLabel();
 
             panel.Add(BuildSectionLabel("ステージを選んでスタート"));
             var stage1Button = BuildStartButton(stage1DisplayName, () => StartStage(stage1SceneName));
@@ -297,12 +317,17 @@ namespace PocketBlaster.UI
 
         private void UpdateVerticalSensitivityLabel()
         {
-            _verticalSensitivityLabel.text = $"感度（上下）: {GameSettings.Current.VerticalSensitivity:F1}";
+            _verticalSensitivityLabel.text = $"感度（構える・上下）: {GameSettings.Current.VerticalSensitivity:F1}";
         }
 
         private void UpdateHorizontalSensitivityLabel()
         {
-            _horizontalSensitivityLabel.text = $"感度（左右）: {GameSettings.Current.HorizontalSensitivity:F1}";
+            _horizontalSensitivityLabel.text = $"感度（構える・左右）: {GameSettings.Current.HorizontalSensitivity:F1}";
+        }
+
+        private void UpdateLookSensitivityLabel()
+        {
+            _lookSensitivityLabel.text = $"感度（構えない・視界回転）: {GameSettings.Current.LookSensitivity:F1}";
         }
 
         private static Label BuildSectionLabel(string text)

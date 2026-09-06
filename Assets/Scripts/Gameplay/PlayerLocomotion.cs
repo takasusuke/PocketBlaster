@@ -1,23 +1,28 @@
 using PocketBlaster.Aim;
+using PocketBlaster.Meta;
 using PocketBlaster.Networking;
 using UnityEngine;
 
 namespace PocketBlaster.Gameplay
 {
     /// <summary>
-    /// プレイヤー移動(オーナー要望、2026-09-06)。「構える」ボタン
+    /// プレイヤーの移動・視界回転(オーナー要望、2026-09-06)。「構える」ボタン
     /// (PhoneControllerServer.IsAiming)を押していない間、スマホの傾きが照準ではなく
-    /// 移動方向の入力になる — 「『構える』ボタンを新たに配置して、構えている間は
-    /// 照準を動かして、構えていない間は移動する」。傾きは1系統しか無いため、狙いと
-    /// 移動のどちらに使うかをこのボタンで明示的に切り替える設計。
+    /// 視界の回転の入力になる — 「構えるときの感度と、構えていない時の感度は
+    /// それぞれ調整できるようにして下さい。構えていない時は、視界が回転するイメージ
+    /// です」。傾きは1系統しか無いため、狙いと視界回転のどちらに使うかをこの
+    /// ボタンで明示的に切り替える設計(GameSettings.LookSensitivity参照 — 狙いの
+    /// 感度(角度→ピクセル)とは単位も意味も違う(角度→回転の角速度)ため別設定)。
     ///
-    /// 構えを解いた瞬間の傾きを「移動の中立姿勢」として基準化し(<see cref="_moveRefBeta"/>
-    /// /<see cref="_moveRefGamma"/>)、そこからの傾き(前後=beta、左右=gamma)を
-    /// カメラの向きを基準にした移動方向へマッピングする(アナログスティックに近い操作感)。
-    /// 傾きが小さい間は不感帯(moveTiltDeadzoneDegrees)で無視し、意図しない移動を防ぐ。
+    /// 構えを解いた瞬間の傾きを「回転の中立姿勢」として基準化し(<see cref="_lookRefBeta"/>
+    /// /<see cref="_lookRefGamma"/>)、そこからの傾き(前後=beta→見上げ/見下ろし、
+    /// 左右=gamma→左右旋回)の大きさに応じて`movableRoot`のローカル回転を継続的に
+    /// 変化させる(倒し続けるほど速く回る、ラジコンのスティックに近い操作感)。
+    /// 傾きが小さい間は不感帯(moveTiltDeadzoneDegrees)で無視し、意図しない回転を防ぐ。
     ///
-    /// 足踏み("step"メッセージ)での小さな踏み込みは、構えている間だけ引き続き有効
-    /// (狙いを定めたまま横に避ける、という元の用途に残す)。
+    /// 実際の歩行は足踏み("step"メッセージ)が担当する。構えている間は狙っている
+    /// 方向へ、構えていない間は現在向いている方向(視界回転後のmovableRoot.forward)へ
+    /// 進む — 「視界を回してから足踏みで歩く」という一般的なFPS操作に近い。
     ///
     /// フィールドの障害物・パルクール(オーナー要望、2026-09-06:「フィールドの構築が
     /// 必要です。オブジェクトを配置したり、小さなオブジェクトに対して...パルクールを
@@ -33,8 +38,8 @@ namespace PocketBlaster.Gameplay
     ///
     /// `movableRoot`未指定時はこのGameObject自身を動かす。StageDirectorと共存する場合は、
     /// カメラをStageDirectorが動かす親(Rig)の子にし、`movableRoot`にカメラのTransformを
-    /// 指定する — 親(Rigのウェーブ間Lerp)と子(このステップ移動)が同じTransformの
-    /// 同じプロパティを取り合わないようにするため。
+    /// 指定する — 親(Rigのウェーブ間Lerp)と子(このステップ移動・視界回転)が同じ
+    /// Transformの同じプロパティを取り合わないようにするため。
     /// </summary>
     public class PlayerLocomotion : MonoBehaviour
     {
@@ -42,17 +47,19 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private GyroReticleController aimSource;
         [SerializeField] private float stepDistance = 0.3f;
         [SerializeField] private float maxOffsetRadius = 9f;
-        [SerializeField] private float moveSpeed = 1.4f;
         [SerializeField] private float moveTiltDeadzoneDegrees = 5f;
         [SerializeField] private float moveTiltMaxDegrees = 30f;
+        [SerializeField] private float maxLookPitchDegrees = 60f;
         [SerializeField] private float stepUpHeight = 0.6f;
 
         private PhoneControllerServer _server;
         private PlayerOffsetState _offsetState;
         private Obstacle[] _obstacles;
         private bool _wasAiming = true;
-        private float _moveRefBeta;
-        private float _moveRefGamma;
+        private float _lookRefBeta;
+        private float _lookRefGamma;
+        private float _lookYaw;
+        private float _lookPitch;
 
         private void Awake()
         {
@@ -72,35 +79,45 @@ namespace PocketBlaster.Gameplay
             if (_server != null) _server.OnStep -= HandleStep;
         }
 
+        /// <summary>
+        /// ウェーブが切り替わる時にStageDirectorから呼ぶ。視界回転・移動オフセットを
+        /// 両方リセットしないと、前のウェーブで振り向いた向きや動いた位置のまま新しい
+        /// ウェーブのカメラ位置に合流してしまい、敵が正面ではなく横に見える等の混乱を
+        /// 招く(移動範囲が2.5m→9mに広がったことで顕在化しうる問題、2026-09-06)。
+        /// </summary>
+        public void ResetForNewWave()
+        {
+            _offsetState.Reset();
+            _lookYaw = 0f;
+            _lookPitch = 0f;
+            movableRoot.localPosition = Vector3.zero;
+            movableRoot.localRotation = Quaternion.identity;
+        }
+
         private void Update()
         {
             if (_server.IsAiming)
             {
                 _wasAiming = true;
-                return; // 構えている間の移動は足踏み(HandleStep)だけが担当する
+                return; // 構えている間は照準側(GyroReticleController)が傾きを使う
             }
 
             if (_wasAiming)
             {
-                // 構えを解いた瞬間の傾きを、移動の「ニュートラル」姿勢として記録する。
-                _moveRefBeta = _server.LatestBeta;
-                _moveRefGamma = _server.LatestGamma;
+                // 構えを解いた瞬間の傾きを、視界回転の「ニュートラル」姿勢として記録する。
+                _lookRefBeta = _server.LatestBeta;
+                _lookRefGamma = _server.LatestGamma;
                 _wasAiming = false;
             }
 
-            var forwardInput = ApplyDeadzone(Mathf.DeltaAngle(_moveRefBeta, _server.LatestBeta));
-            var sideInput = ApplyDeadzone(Mathf.DeltaAngle(_moveRefGamma, _server.LatestGamma));
-            if (forwardInput == 0f && sideInput == 0f) return;
+            var yawInput = ApplyDeadzone(Mathf.DeltaAngle(_lookRefGamma, _server.LatestGamma));
+            var pitchInput = ApplyDeadzone(Mathf.DeltaAngle(_lookRefBeta, _server.LatestBeta));
+            if (yawInput == 0f && pitchInput == 0f) return;
 
-            var forward = movableRoot.forward;
-            forward.y = 0f;
-            forward.Normalize();
-            var right = movableRoot.right;
-            right.y = 0f;
-            right.Normalize();
-
-            var direction = forward * forwardInput + right * sideInput;
-            TryMoveTo(_offsetState.ComputeStepResult(direction, moveSpeed * Time.deltaTime));
+            var lookSensitivity = GameSettings.Current.LookSensitivity;
+            _lookYaw += yawInput * lookSensitivity * Time.deltaTime;
+            _lookPitch = Mathf.Clamp(_lookPitch - pitchInput * lookSensitivity * Time.deltaTime, -maxLookPitchDegrees, maxLookPitchDegrees);
+            movableRoot.localRotation = Quaternion.Euler(_lookPitch, _lookYaw, 0f);
         }
 
         /// <summary>傾き(度)を-1〜1の入力値へ変換する。不感帯以下は0、最大角以上は±1。</summary>
@@ -114,12 +131,22 @@ namespace PocketBlaster.Gameplay
 
         private void HandleStep()
         {
-            if (!_server.IsAiming) return; // 移動中は傾き入力(Update)が担当するため足踏みは無視
-            if (aimSource == null) return;
-            var aimRay = aimSource.GetAimRay();
-            if (aimRay == null) return;
+            Vector3 direction;
+            if (_server.IsAiming)
+            {
+                // 構えている間は、狙いを定めたまま横に避ける、という元の用途。
+                if (aimSource == null) return;
+                var aimRay = aimSource.GetAimRay();
+                if (aimRay == null) return;
+                direction = aimRay.Value.direction;
+            }
+            else
+            {
+                // 構えていない間は、視界回転後に現在向いている方向へ歩く。
+                direction = movableRoot.forward;
+            }
 
-            TryMoveTo(_offsetState.ComputeStepResult(aimRay.Value.direction, stepDistance));
+            TryMoveTo(_offsetState.ComputeStepResult(direction, stepDistance));
         }
 
         /// <summary>

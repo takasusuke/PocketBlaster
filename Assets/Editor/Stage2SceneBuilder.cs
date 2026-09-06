@@ -150,6 +150,7 @@ namespace PocketBlaster.EditorTools
             directorSo.FindProperty("stageCamera").objectReferenceValue = camera;
             directorSo.FindProperty("moveTarget").objectReferenceValue = playerRigGo.transform;
             directorSo.FindProperty("reticleController").objectReferenceValue = reticleController;
+            directorSo.FindProperty("playerLocomotion").objectReferenceValue = locomotion;
 
             var wavesProp = directorSo.FindProperty("waves");
             wavesProp.arraySize = 6;

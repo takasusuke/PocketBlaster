@@ -375,22 +375,32 @@
   aimBtn.addEventListener('pointerup', stopAiming);
   aimBtn.addEventListener('pointercancel', stopAiming);
 
-  shootBtn.addEventListener('click', function () {
+  // 修正(2026-09-06、オーナー報告「構えたボタンは長押しにしたままで、撃つボタンを
+  // 押すアクションを取っていますが撃てません」): 「撃つ」は常に「構える」を押した
+  // ままの状態で押すことになった結果、必ず2本指の同時タッチになった。'click'は
+  // ブラウザが生成する合成イベントで、別の指が別要素に触れたままだと発火が遅れたり
+  // 抑制されたりすることがある(特にモバイルSafari)。'pointerdown'は合成を待たず
+  // その場で発火するため、他のボタンも含めてこちらへ統一した。
+  shootBtn.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
     sendMessage('shoot');
   });
 
-  reloadBtn.addEventListener('click', function () {
+  reloadBtn.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
     sendMessage('reload');
   });
 
-  pauseBtn.addEventListener('click', function () {
+  pauseBtn.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
     sendMessage('pause');
   });
 
   // 再挑戦はUnity側でシーンを丸ごとリロードする(GameSession参照)。以前はサーバーごと
   // 作り直されて接続も切れていたが、PhoneControllerServerを永続シングルトン化した
   // ことで接続は維持されるようになった(2026-09-06、docs/HANDOFF.md参照)。
-  retryBtn.addEventListener('click', function () {
+  retryBtn.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
     sendMessage('retry');
   });
 })();

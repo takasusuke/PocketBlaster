@@ -58,13 +58,26 @@ namespace PocketBlaster.Tests.EditMode
         }
 
         [Test]
+        public void LookSensitivityIsClampedToDefinedRangeIndependentlyOfAimSensitivity()
+        {
+            var settings = GameSettingsState.CreateDefault();
+            settings.SetVerticalSensitivity(20f);
+            settings.SetLookSensitivity(0f);
+            Assert.AreEqual(GameSettingsState.MinLookSensitivity, settings.LookSensitivity);
+            settings.SetLookSensitivity(9999f);
+            Assert.AreEqual(GameSettingsState.MaxLookSensitivity, settings.LookSensitivity);
+            Assert.AreEqual(20f, settings.VerticalSensitivity, "視界回転の感度を変更しても構える感度は影響を受けないこと");
+        }
+
+        [Test]
         public void ConstructorAlsoClampsInvalidValues()
         {
-            var settings = new GameSettingsState(true, sfxVolume: 2f, verticalSensitivity: 1f, horizontalSensitivity: 999f);
+            var settings = new GameSettingsState(true, sfxVolume: 2f, verticalSensitivity: 1f, horizontalSensitivity: 999f, lookSensitivity: 1f);
             Assert.IsTrue(settings.IsArcadeMode);
             Assert.AreEqual(1f, settings.SfxVolume);
             Assert.AreEqual(GameSettingsState.MinSensitivity, settings.VerticalSensitivity);
             Assert.AreEqual(GameSettingsState.MaxSensitivity, settings.HorizontalSensitivity);
+            Assert.AreEqual(GameSettingsState.MinLookSensitivity, settings.LookSensitivity);
         }
     }
 }

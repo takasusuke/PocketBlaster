@@ -10,29 +10,41 @@ namespace PocketBlaster.Meta
     /// 感度は上下(Vertical)・左右(Horizontal)を別々に持つ(オーナー要望、2026-09-06:
     /// 「上下左右方向の感度をユーザごとに調整できるようにしてください」)。持ち方や
     /// スマホの機種によって上下と左右で振れやすさが違うことがあるため、1本の値では
-    /// 個人差を吸収しきれない。
+    /// 個人差を吸収しきれない。これは「構えている間」(照準)の感度。
+    ///
+    /// 「構えていない間」(視界の回転、PlayerLocomotion参照)は狙いとは意味も単位も
+    /// 違う値(角度→ピクセルのオフセットではなく、角度→回転の角速度)なので、
+    /// 別の設定(LookSensitivity)として独立させている(オーナー要望、2026-09-06:
+    /// 「構えるときの感度と、構えていない時の感度はそれぞれ調整できるようにして
+    /// 下さい」)。
     /// </summary>
     public class GameSettingsState
     {
         public const float MinSensitivity = 4f;
         public const float MaxSensitivity = 24f;
+        public const float MinLookSensitivity = 20f;
+        public const float MaxLookSensitivity = 120f;
 
         public bool IsArcadeMode { get; private set; }
         public float SfxVolume { get; private set; }
         public float VerticalSensitivity { get; private set; }
         public float HorizontalSensitivity { get; private set; }
+        public float LookSensitivity { get; private set; }
 
-        public GameSettingsState(bool isArcadeMode, float sfxVolume, float verticalSensitivity, float horizontalSensitivity)
+        public GameSettingsState(bool isArcadeMode, float sfxVolume, float verticalSensitivity, float horizontalSensitivity, float lookSensitivity)
         {
             IsArcadeMode = isArcadeMode;
             SfxVolume = ClampUnit(sfxVolume);
             VerticalSensitivity = ClampSensitivity(verticalSensitivity);
             HorizontalSensitivity = ClampSensitivity(horizontalSensitivity);
+            LookSensitivity = ClampLookSensitivity(lookSensitivity);
         }
 
         public static GameSettingsState CreateDefault()
         {
-            return new GameSettingsState(isArcadeMode: false, sfxVolume: 1f, verticalSensitivity: 12f, horizontalSensitivity: 12f);
+            return new GameSettingsState(
+                isArcadeMode: false, sfxVolume: 1f,
+                verticalSensitivity: 12f, horizontalSensitivity: 12f, lookSensitivity: 60f);
         }
 
         public void SetMode(bool isArcadeMode)
@@ -55,6 +67,11 @@ namespace PocketBlaster.Meta
             HorizontalSensitivity = ClampSensitivity(value);
         }
 
+        public void SetLookSensitivity(float value)
+        {
+            LookSensitivity = ClampLookSensitivity(value);
+        }
+
         private static float ClampUnit(float value)
         {
             if (value < 0f) return 0f;
@@ -66,6 +83,13 @@ namespace PocketBlaster.Meta
         {
             if (value < MinSensitivity) return MinSensitivity;
             if (value > MaxSensitivity) return MaxSensitivity;
+            return value;
+        }
+
+        private static float ClampLookSensitivity(float value)
+        {
+            if (value < MinLookSensitivity) return MinLookSensitivity;
+            if (value > MaxLookSensitivity) return MaxLookSensitivity;
             return value;
         }
     }

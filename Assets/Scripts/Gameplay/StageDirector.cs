@@ -45,6 +45,7 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Wave[] waves;
         [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
         [SerializeField] private GyroReticleController reticleController;
+        [SerializeField] private PlayerLocomotion playerLocomotion;
         [SerializeField, Range(0f, 1f)] private float pickupSpawnChance = 0.5f;
 
         /// <summary>
@@ -76,6 +77,7 @@ namespace PocketBlaster.Gameplay
             if (stageCamera == null) stageCamera = Camera.main;
             if (moveTarget == null) moveTarget = stageCamera.transform;
             if (reticleController == null) reticleController = FindFirstObjectByType<GyroReticleController>();
+            if (playerLocomotion == null) playerLocomotion = FindFirstObjectByType<PlayerLocomotion>();
 
             _score = new ScoreState();
             _highScorePrefsKey = $"PocketBlaster.HighScore.{gameObject.scene.name}";
@@ -112,6 +114,10 @@ namespace PocketBlaster.Gameplay
                 var approach = enemy.GetComponent<EnemyApproach>();
                 if (approach != null) approach.OnReachedPlayer += HandleEnemyReachedPlayer;
             }
+
+            // 前のウェーブで振り向いた/動いた分を持ち越さない(2026-09-06、
+            // PlayerLocomotion.ResetForNewWave参照)。
+            if (playerLocomotion != null) playerLocomotion.ResetForNewWave();
 
             UpdateWaveLabel();
             MaybeSpawnPickup(wave);
