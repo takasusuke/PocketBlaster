@@ -37,6 +37,9 @@ namespace PocketBlaster.Gameplay
         public event System.Action<Target> OnDefeated;
 
         public int PointValue => pointValue;
+        /// <summary>直近の被弾がヘッドショット(即死判定)だったか。StageDirectorが
+        /// 得点ボーナスの判定に使う(オーナー要望2026-09-06、HeadHitbox参照)。</summary>
+        public bool WasLastHitHeadshot { get; private set; }
 
         private Transform _visual;
         private Renderer _renderer;
@@ -62,10 +65,16 @@ namespace PocketBlaster.Gameplay
             _state = new TargetHitState(flashDurationSeconds, knockDurationSeconds, downDurationSeconds, respawnsAfterDefeat, hitPoints);
         }
 
-        public void TakeHit()
+        public void TakeHit() => TakeHitInternal(isHeadshot: false);
+
+        /// <summary>ヘッドショット(HeadHitbox参照)。残り被弾可能回数を無視して即座に倒す。</summary>
+        public void TakeHeadshot() => TakeHitInternal(isHeadshot: true);
+
+        private void TakeHitInternal(bool isHeadshot)
         {
-            if (_state.TryHit())
+            if (_state.TryHit(isHeadshot))
             {
+                WasLastHitHeadshot = isHeadshot;
                 OnHit?.Invoke();
                 JuiceSplashEffect.SpawnAt(transform.position, juiceColor);
             }

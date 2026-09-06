@@ -8,19 +8,16 @@ using UnityEngine.UIElements;
 namespace PocketBlaster.Gameplay
 {
     /// <summary>
-    /// マイルストーン4(docs/requirements.md §4): オンレールの敵配置・複数ウェーブを持つ
-    /// 短い1ステージ。「ゲームとしての手触りを通しで確認する」ことが目的なので、
-    /// カメラの移動は滑らかなレール(スプライン)ではなく、ウェーブごとの固定ポイント間を
-    /// 単純に補間するだけの最小実装にしてある。
-    ///
+    /// マイルストーン4(docs/requirements.md §4): 複数ウェーブの敵配置を持つ1ステージ。
     /// 各ウェーブの敵(Target、respawnsAfterDefeat=falseにしておく必要がある)を全滅させると
-    /// 次のウェーブのカメラ位置へ移動する。最後のウェーブをクリアすると「ステージクリア」を表示。
+    /// 次のウェーブへ進む。最後のウェーブをクリアすると「ステージクリア」を表示。
     ///
-    /// 足踏みでの微移動(PlayerLocomotion)と共存させる場合は、カメラをこのスクリプトが
-    /// 直接動かすのではなく`moveTarget`(通常はカメラの親、Rig)を動かす — カメラ自身は
-    /// PlayerLocomotionがRigからのローカルオフセットとして動かすため、同じTransformの
-    /// 同じプロパティを2つのスクリプトが取り合わないようにする。`moveTarget`未指定時は
-    /// 従来通りカメラ自身を動かす。
+    /// 以前はウェーブが変わるたびにカメラ(Rig)を固定ポイント間でLerp移動させていたが、
+    /// オーナー指示(2026-09-06:「自由に歩き回るようにします」)によりプレイヤーが
+    /// フィールド全体を自由に歩き回れるようにしたため、この自動移動は廃止した
+    /// (PlayerLocomotion.maxOffsetRadius参照)。ウェーブの切り替わりは敵の有効化/
+    /// 無効化とスコア・UI更新だけを担い、プレイヤーの位置・向きには一切触れない。
+    /// `moveTarget`はアイテムの出現位置の基準としてのみ残っている(MaybeSpawnPickup参照)。
     ///
     /// 得点(docs/requirements.md §8 将来の拡張)は、このステージ内のTarget.OnDefeatedを
     /// 全部購読しているのでここに乗せている(Target.PointValueの合計、ScoreState参照)。
@@ -43,9 +40,7 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Camera stageCamera;
         [SerializeField] private Transform moveTarget;
         [SerializeField] private Wave[] waves;
-        [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
         [SerializeField] private GyroReticleController reticleController;
-        [SerializeField] private PlayerLocomotion playerLocomotion;
         [SerializeField, Range(0f, 1f)] private float pickupSpawnChance = 0.5f;
 
         /// <summary>
@@ -77,7 +72,6 @@ namespace PocketBlaster.Gameplay
             if (stageCamera == null) stageCamera = Camera.main;
             if (moveTarget == null) moveTarget = stageCamera.transform;
             if (reticleController == null) reticleController = FindFirstObjectByType<GyroReticleController>();
-            if (playerLocomotion == null) playerLocomotion = FindFirstObjectByType<PlayerLocomotion>();
 
             _score = new ScoreState();
             _highScorePrefsKey = $"PocketBlaster.HighScore.{gameObject.scene.name}";
@@ -115,18 +109,8 @@ namespace PocketBlaster.Gameplay
                 if (approach != null) approach.OnReachedPlayer += HandleEnemyReachedPlayer;
             }
 
-            // 前のウェーブで振り向いた/動いた分を持ち越さない(2026-09-06、
-            // PlayerLocomotion.ResetForNewWave参照)。
-            if (playerLocomotion != null) playerLocomotion.ResetForNewWave();
-
             UpdateWaveLabel();
             MaybeSpawnPickup(wave);
-
-            if (wave.cameraWaypoint != null)
-            {
-                StopAllCoroutines();
-                StartCoroutine(MoveCameraTo(wave.cameraWaypoint.position, wave.cameraWaypoint.rotation));
-            }
         }
 
         /// <summary>
@@ -189,10 +173,14 @@ namespace PocketBlaster.Gameplay
 
         private void HandleEnemyDefeated(Target defeatedTarget)
         {
-            _score.AddPoints(defeatedTarget.PointValue);
+            // ヘッドショットは反動コントロールの見返りとして得点を2倍にする
+            // (オーナー要望2026-09-06:「反動コントロール要素として、敵のヘッドショットなど
+            // 部位別のダメージ量変化を実装してもらって試したい」。HeadHitbox参照)。
+            var points = defeatedTarget.WasLastHitHeadshot ? defeatedTarget.PointValue * 2 : defeatedTarget.PointValue;
+            _score.AddPoints(points);
             // 倒した場所にその場で加点を表示する(オーナー要望2026-09-06:
             // 「敵を倒した時にスコアを表示するようにしてください」)。
-            ScorePopupEffect.SpawnAt(defeatedTarget.transform.position, defeatedTarget.PointValue, stageCamera);
+            ScorePopupEffect.SpawnAt(defeatedTarget.transform.position, points, stageCamera);
             AdvanceWaveState();
         }
 
@@ -220,23 +208,6 @@ namespace PocketBlaster.Gameplay
                 ClearCurrentPickup();
                 StartNextWave();
             }
-        }
-
-        private IEnumerator MoveCameraTo(Vector3 targetPosition, Quaternion targetRotation)
-        {
-            var startPosition = moveTarget.position;
-            var startRotation = moveTarget.rotation;
-            var t = 0f;
-            while (t < cameraMoveDurationSeconds)
-            {
-                t += Time.deltaTime;
-                var p = Mathf.Clamp01(t / cameraMoveDurationSeconds);
-                moveTarget.position = Vector3.Lerp(startPosition, targetPosition, p);
-                moveTarget.rotation = Quaternion.Slerp(startRotation, targetRotation, p);
-                yield return null;
-            }
-            moveTarget.position = targetPosition;
-            moveTarget.rotation = targetRotation;
         }
 
         private void UpdateWaveLabel()

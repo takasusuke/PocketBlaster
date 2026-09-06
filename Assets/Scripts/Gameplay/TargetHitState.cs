@@ -73,11 +73,15 @@ namespace PocketBlaster.Gameplay
             _remainingHitPoints = _maxHitPoints;
         }
 
+        /// <param name="isCritical">
+        /// ヘッドショット等の即死判定(オーナー要望、2026-09-06:「敵のヘッドショットなど
+        /// 部位別のダメージ量変化」)。trueなら残り被弾可能回数を無視して即座に倒す。
+        /// </param>
         /// <returns>実際にヒット処理を開始できたか(反応中の二重ヒットは無視してfalse)</returns>
-        public bool TryHit()
+        public bool TryHit(bool isCritical = false)
         {
             if (CurrentPhase != Phase.Idle) return false;
-            _remainingHitPoints--;
+            _remainingHitPoints = isCritical ? 0 : _remainingHitPoints - 1;
             _pendingFatalHit = _remainingHitPoints <= 0;
             Advance(Phase.Flash);
             return true;

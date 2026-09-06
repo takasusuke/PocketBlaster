@@ -22,9 +22,18 @@ namespace PocketBlaster.Gameplay
     {
         [SerializeField] private float radius = 0.6f;
         [SerializeField] private float height = 0.4f;
+        [SerializeField] private bool isPlatform;
 
         public Vector3 Position => transform.position;
         public float Radius => radius;
         public float Height => height;
+
+        /// <summary>
+        /// trueなら`stepUpHeight`を無視して常に登れる「足場」として扱う
+        /// (オーナー要望2026-09-06の落下ダメージを試すための高低差を作る用途。
+        /// PlayerLocomotion.TryMoveTo参照)。falseの既定は従来通りObstacleCrossingで判定する
+        /// 低い箱(乗り越え)や高い壁(通行不可)。
+        /// </summary>
+        public bool IsPlatform => isPlatform;
     }
 }

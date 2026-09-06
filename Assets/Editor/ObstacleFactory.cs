@@ -14,7 +14,7 @@ namespace PocketBlaster.EditorTools
     /// </summary>
     public static class ObstacleFactory
     {
-        public static Obstacle CreateBox(string name, Vector3 groundPosition, float radius, float height, Color color)
+        public static Obstacle CreateBox(string name, Vector3 groundPosition, float radius, float height, Color color, bool isPlatform = false)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = name;
@@ -28,6 +28,7 @@ namespace PocketBlaster.EditorTools
             var so = new SerializedObject(obstacle);
             so.FindProperty("radius").floatValue = radius;
             so.FindProperty("height").floatValue = height;
+            so.FindProperty("isPlatform").boolValue = isPlatform;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             return obstacle;

@@ -10,10 +10,14 @@ using UnityEngine.UIElements;
 namespace PocketBlaster.Gameplay
 {
     /// <summary>
-    /// 難易度モード(docs/requirements.md §8 将来の拡張)。フェールの条件は2つ:
-    /// 「狙って撃ってはずした」(GyroReticleController.OnShotResolved、弾切れの空撃ちは
-    /// ノーカウント)と、「敵に近づかれ過ぎた」(StageDirector.OnEnemyReachedPlayer、
-    /// EnemyApproach参照、2026-09-06追加)。どちらもアーケードモードでのみ残機を減らす。
+    /// 難易度モード(docs/requirements.md §8 将来の拡張)。フェールの条件は
+    /// 「敵に近づかれ過ぎた」(StageDirector.OnEnemyReachedPlayer、EnemyApproach参照、
+    /// 2026-09-06追加)のみ。アーケードモードでのみ残機を減らす。
+    ///
+    /// 「狙って撃ってはずした」も残機を減らす条件だったが、実際に遊んでみて厳しすぎる
+    /// という判断からオーナーが却下した(2026-09-06:「難易度モード「はずれ＝残機減少」は
+    /// 却下です」)。`GyroReticleController.OnShotResolved`イベント自体は残しているが、
+    /// このクラスではもう購読しない。
     ///
     /// モードは起動画面(Title、TitleScreenController)で選び、GameSettings(PlayerPrefs)
     /// 経由でシーンをまたいで受け渡される(2026-09-06、以前はスマホ側の接続直後の
@@ -23,7 +27,12 @@ namespace PocketBlaster.Gameplay
     /// 一時停止はTime.timeScaleを0/1で切り替えるだけ(ジャイロ移動・敵の接近・カメラの
     /// Lerp移動などTime.deltaTimeに依存する処理は自動的に止まる)。射撃だけは
     /// timeScaleの影響を受けないため、GyroReticleControllerを明示的に無効化する。
-    /// 再挑戦はシーンを丸ごとリロードする(スコア・残機・ウェーブ進行がすべて初期化される)。
+    /// 再挑戦はシーンを丸ごとリロードする(スコア・体力・ウェーブ進行がすべて初期化される)。
+    ///
+    /// 体力は「残機」(整数の残り回数)から「HPゲージ」(PlayerHealthState)へ移行した
+    /// (オーナー要望2026-09-06:「プレイヤーの体力ゲージもUIとして実装してください」)。
+    /// ダメージ量は発生源によって変える — 敵接触は大きめ、落下は高さに応じて可変
+    /// (PlayerLocomotion.OnFallDamage、FallDamageCalculator参照)。
     /// </summary>
     public class GameSession : MonoBehaviour
     {
@@ -33,12 +42,15 @@ namespace PocketBlaster.Gameplay
             Arcade
         }
 
-        [SerializeField] private int startingLives = 3;
+        [SerializeField] private int maxHealth = 100;
+        [SerializeField] private int enemyContactDamage = 30;
+        [SerializeField] private int healthPickupHealAmount = 30;
         [SerializeField] private GyroReticleController reticleController;
         [SerializeField] private StageDirector stageDirector;
+        [SerializeField] private PlayerLocomotion playerLocomotion;
 
         private PhoneControllerServer _server;
-        private LivesState _lives;
+        private PlayerHealthState _health;
         private Mode _mode = Mode.Casual;
         private bool _isGameOver;
         private bool _isPaused;
@@ -50,6 +62,8 @@ namespace PocketBlaster.Gameplay
         private Label _pauseLabel;
         private VisualElement _damageFlash;
         private Coroutine _damageFlashRoutine;
+        private VisualElement _healthBarTrack;
+        private VisualElement _healthBarFill;
 
         private void Awake()
         {
@@ -59,18 +73,19 @@ namespace PocketBlaster.Gameplay
             _server = PhoneControllerServer.GetOrCreate();
             if (reticleController == null) reticleController = GetComponent<GyroReticleController>();
             if (stageDirector == null) stageDirector = FindFirstObjectByType<StageDirector>();
+            if (playerLocomotion == null) playerLocomotion = GetComponent<PlayerLocomotion>();
 
             _mode = GameSettings.Current.IsArcadeMode ? Mode.Arcade : Mode.Casual;
-            _lives = _mode == Mode.Arcade ? new LivesState(startingLives) : null;
+            _health = _mode == Mode.Arcade ? new PlayerHealthState(maxHealth) : null;
 
             _server.OnPauseToggleRequested += HandlePauseToggleRequested;
             _server.OnRetryRequested += HandleRetryRequested;
-            if (reticleController != null) reticleController.OnShotResolved += HandleShotResolved;
             if (stageDirector != null)
             {
                 stageDirector.OnEnemyReachedPlayer += HandleEnemyReachedPlayer;
                 stageDirector.OnHealthPickupCollected += HandleHealthPickupCollected;
             }
+            if (playerLocomotion != null) playerLocomotion.OnFallDamage += HandleFallDamage;
 
             BuildUi();
             UpdateLabel();
@@ -83,12 +98,12 @@ namespace PocketBlaster.Gameplay
                 _server.OnPauseToggleRequested -= HandlePauseToggleRequested;
                 _server.OnRetryRequested -= HandleRetryRequested;
             }
-            if (reticleController != null) reticleController.OnShotResolved -= HandleShotResolved;
             if (stageDirector != null)
             {
                 stageDirector.OnEnemyReachedPlayer -= HandleEnemyReachedPlayer;
                 stageDirector.OnHealthPickupCollected -= HandleHealthPickupCollected;
             }
+            if (playerLocomotion != null) playerLocomotion.OnFallDamage -= HandleFallDamage;
             if (_panelSettings != null) Destroy(_panelSettings);
 
             // このGameObjectが破棄される時(シーン遷移等)にtimeScaleが0のまま
@@ -112,34 +127,38 @@ namespace PocketBlaster.Gameplay
             SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
         }
 
-        private void HandleShotResolved(bool didHit)
-        {
-            if (didHit) return;
-            LoseLifeIfArcade("はずれ");
-        }
-
         private void HandleEnemyReachedPlayer()
         {
-            LoseLifeIfArcade("敵の接近");
+            TakeDamageIfArcade(enemyContactDamage, "敵の接近");
         }
 
         /// <summary>
-        /// 体力回復アイテム(オーナー要望、2026-09-06)。カジュアルモードには残機の
+        /// 高すぎる場所からの落下ダメージ(オーナー要望、2026-09-06:「あまりに高い
+        /// ところから飛び降りる場合にはダメージが入るようにしてください」)。
+        /// PlayerLocomotion側で落差と安全な高さから算出済みの量をそのまま適用する。
+        /// </summary>
+        private void HandleFallDamage(int amount)
+        {
+            TakeDamageIfArcade(amount, "落下");
+        }
+
+        /// <summary>
+        /// 体力回復アイテム(オーナー要望、2026-09-06)。カジュアルモードには体力の
         /// 概念が無いので何もしない(StageDirector側でもカジュアルモードでは
         /// このアイテム自体を出現候補から除外している)。
         /// </summary>
         private void HandleHealthPickupCollected()
         {
             if (_mode != Mode.Arcade || _isGameOver) return;
-            _lives.RestoreLife();
+            _health.Heal(healthPickupHealAmount);
             UpdateLabel();
         }
 
-        private void LoseLifeIfArcade(string reason)
+        private void TakeDamageIfArcade(int amount, string reason)
         {
             if (_mode != Mode.Arcade || _isGameOver) return;
 
-            var isGameOverNow = _lives.LoseLife();
+            var isGameOverNow = _health.TakeDamage(amount);
             TriggerDamageFlash();
             if (isGameOverNow)
             {
@@ -180,12 +199,17 @@ namespace PocketBlaster.Gameplay
             if (_mode == Mode.Casual)
             {
                 _sessionLabel.text = "モード: カジュアル（無制限）";
+                _healthBarTrack.style.display = DisplayStyle.None;
                 return;
             }
 
             _sessionLabel.text = _isGameOver
-                ? $"ゲームオーバー（{_gameOverReason}で残機が尽きました）"
-                : $"モード: アーケード  残機: {_lives.RemainingLives}";
+                ? $"ゲームオーバー（{_gameOverReason}でHPが尽きました）"
+                : $"モード: アーケード  HP: {_health.CurrentHealth}/{_health.MaxHealth}";
+
+            _healthBarTrack.style.display = DisplayStyle.Flex;
+            var ratio = Mathf.Clamp01(_health.CurrentHealth / (float)_health.MaxHealth);
+            _healthBarFill.style.width = Length.Percent(ratio * 100f);
         }
 
         private void BuildUi()
@@ -208,6 +232,34 @@ namespace PocketBlaster.Gameplay
             _sessionLabel.style.fontSize = 18;
             RuntimeLabelStyle.ApplyDefaultFont(_sessionLabel);
             _uiDocument.rootVisualElement.Add(_sessionLabel);
+
+            // 体力ゲージ(オーナー要望2026-09-06)。GyroReticleControllerのリロードバーと
+            // 同じtrack+fillの構成。アーケードモードのみ表示(UpdateLabel参照)。
+            _healthBarTrack = new VisualElement();
+            _healthBarTrack.style.position = Position.Absolute;
+            _healthBarTrack.style.left = 12;
+            _healthBarTrack.style.bottom = 40;
+            _healthBarTrack.style.width = 220;
+            _healthBarTrack.style.height = 16;
+            _healthBarTrack.style.backgroundColor = new Color(0f, 0f, 0f, 0.5f);
+            _healthBarTrack.style.borderTopLeftRadius = 4;
+            _healthBarTrack.style.borderTopRightRadius = 4;
+            _healthBarTrack.style.borderBottomLeftRadius = 4;
+            _healthBarTrack.style.borderBottomRightRadius = 4;
+            _uiDocument.rootVisualElement.Add(_healthBarTrack);
+
+            _healthBarFill = new VisualElement();
+            _healthBarFill.style.position = Position.Absolute;
+            _healthBarFill.style.left = 0;
+            _healthBarFill.style.top = 0;
+            _healthBarFill.style.bottom = 0;
+            _healthBarFill.style.width = Length.Percent(100);
+            _healthBarFill.style.backgroundColor = new Color(0.2f, 0.8f, 0.3f);
+            _healthBarFill.style.borderTopLeftRadius = 4;
+            _healthBarFill.style.borderTopRightRadius = 4;
+            _healthBarFill.style.borderBottomLeftRadius = 4;
+            _healthBarFill.style.borderBottomRightRadius = 4;
+            _healthBarTrack.Add(_healthBarFill);
 
             _pauseLabel = new Label("一時停止中");
             _pauseLabel.style.display = DisplayStyle.None;

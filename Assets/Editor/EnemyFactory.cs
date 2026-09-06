@@ -85,6 +85,21 @@ namespace PocketBlaster.EditorTools
             so.FindProperty("pointValue").intValue = profile.PointValue;
             so.ApplyModifiedPropertiesWithoutUndo();
 
+            // 頭部の当たり判定(オーナー要望、2026-09-06:「敵のヘッドショットなど部位別の
+            // ダメージ量変化」)。visualGo(スケール済み)の子にすることで、rootの
+            // BoxColliderと同じくスプライトの見た目に追従する。サイズ・位置は
+            // visualGoのスケールが自動で効くため、spriteSizeへ改めてscaleを掛けない。
+            var headGo = new GameObject("Head");
+            headGo.transform.SetParent(visualGo.transform, false);
+            var headSize = new Vector3(spriteSize.x * 0.55f, spriteSize.y * 0.28f, 0.4f);
+            headGo.transform.localPosition = new Vector3(0f, spriteSize.y * 0.5f - headSize.y * 0.5f, 0f);
+            var headCollider = headGo.AddComponent<BoxCollider>();
+            headCollider.size = headSize;
+            var headHitbox = headGo.AddComponent<HeadHitbox>();
+            var headSo = new SerializedObject(headHitbox);
+            headSo.FindProperty("target").objectReferenceValue = target;
+            headSo.ApplyModifiedPropertiesWithoutUndo();
+
             // 固定的な仮の敵(Milestone3)には付けない。ウェーブ制のステージだけ
             // 「近づいてくる」動きを持たせる(オーナー要望、2026-09-06)。
             if (approaches)

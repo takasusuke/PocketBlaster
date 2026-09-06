@@ -27,6 +27,53 @@ Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きま
    （「ダブルクリックでシーンが開く」という一般的な理解は、少なくともこの起動経路
    （`Start-Process`での直接起動）には当てはまらなかった）
 
+## 自由移動の最終決定・体力ゲージ・反動/ヘッドショット・落下ダメージ（2026-09-06）
+
+- **「オンレール式」を完全に撤回（オーナー指示「自由に歩き回るようにします」）**:
+  `StageDirector`はもうウェーブ間でプレイヤーの位置・向き・カメラを動かさない
+  （`MoveCameraTo`コルーチンごと削除）。`PlayerLocomotion.maxOffsetRadius`を
+  9m→30mに拡大。この撤回に伴い、両者の間の古い`playerLocomotion`参照配線
+  （`StageDirector`・`Milestone4SceneBuilder`・`Stage2SceneBuilder`）を削除した。
+  **未検証**: 30mという上限・床の実際の広さが体感としてちょうどいいか。
+- **「はずれ＝残機減少」を却下（オーナー指示）**: `GameSession`はもう
+  `GyroReticleController.OnShotResolved`を購読しない。フェール条件は「敵に近づかれ
+  過ぎた」と「高すぎる場所からの落下」の2つだけになった。
+- **残機(`LivesState`)→HPゲージ(`PlayerHealthState`)へ移行（オーナー要望「体力ゲージも
+  UIとして実装してください」）**: 最大100の整数HP。敵接触ダメージ30・回復アイテム30回復
+  （どちらも仮の値）。アーケードモードのみ画面下に体力バー（track+fill構成）を表示、
+  カジュアルモードでは非表示。`LivesState.cs`/`LivesStateTests.cs`は削除した。
+  **未検証**: ダメージ・回復量のバランス、バーの見た目。
+- **落下ダメージ（オーナー要望「あまりに高いところから飛び降りる場合にはダメージが
+  入るように」）**: `Obstacle.IsPlatform`（新規、`stepUpHeight`を無視して常に登れる
+  足場）、`PlayerLocomotion`が直前の高さとの差分を追跡して`OnFallDamage`イベントを
+  発火、`FallDamageCalculator`(安全高1.5m・20ダメージ/m、どちらも仮)がUnity非依存で
+  ダメージ量を計算する。各ステージに試作の足場(`Obstacle_Platform`、高さ3m)を
+  1つだけ配置済み。**未検証**: 実際に飛び降りてみての閾値・ダメージ量の調整。
+- **反動・ヘッドショット等の部位別ダメージ（オーナー要望「まずは反動と、その反動
+  コントロール要素として、敵のヘッドショットなど部位別のダメージ量変化を実装して
+  もらって試したい」——ジャイロの操作感自体については「撃っていて楽しい、狙う感覚が
+  いい感じ」と肯定的な評価をもらえたので、その先の掘り下げとして着手）**:
+  - `GyroReticleController`: 発砲のたびにレティクルを上へ弾き、時間経過で戻す
+    （`recoilKickPixels`/`recoilRecoverySpeedPixelsPerSecond`）。連射するほど
+    自分で反動を抑える必要が生まれる設計。
+  - `HeadHitbox`(新規)を各敵の見た目の上部20〜25%あたりに配置(`EnemyFactory`が生成、
+    `SerializedObject`で明示的に`target`を配線 — Editor/バッチモードでの生成は
+    `Awake()`が確実に走るとは限らないため自動解決に頼らなかった)。
+  - `TryHitTargetAtReticle`を`Physics.RaycastAll`+距離ソートへ書き換え、頭部命中を
+    優先判定してから通常の`IShootable`判定にフォールバックする。
+  - ヘッドショットは`TargetHitState.TryHit(isCritical: true)`で残り被弾可能回数を
+    無視して即座に倒し、`StageDirector`が撃破得点を2倍にする。
+  - **未検証**: 反動の強さ、ヘッドショット判定域の大きさ・位置、いずれも実機での調整待ち。
+- **確認方法**: EditMode 62件全て通過（Bash経由で`heavy_lock.py`がUnity.exeを直接
+  ラップする形で実行——後述のPowerShellハングが今回も続いていたため）。
+  `Milestone3_ShootTarget`/`Milestone4_Stage`/`Stage2_BossRush`の3シーンを
+  `-executeMethod`で再ビルドし、`HeadHitbox`・`isPlatform`・`maxHealth`が
+  意図通りシーンに反映されていることをYAML上で確認した。**実機(Play Mode)での
+  動作確認はまだ行っていない**——上記の「未検証」項目はすべてこれに該当する。
+  再ビルド前に、このプロジェクトを開いたままのGUI Editor(PID 16204)が1つ残っていて
+  バッチ実行をブロックしていたため、`taskkill`で閉じてから実行した
+  （このセッションの最後にUnity Editorを`Title.unity`で開き直す）。
+
 ## クラッシュ修正・上下反転の食い違い修正・視線カーソル・移動速度・床グリッド（2026-09-06）
 
 - **NullReferenceExceptionの修正（オーナー報告）**: `StageDirector.Awake()`が

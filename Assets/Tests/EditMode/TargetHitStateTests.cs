@@ -104,6 +104,16 @@ namespace PocketBlaster.Tests.EditMode
         }
 
         [Test]
+        public void CriticalHitDefeatsRegardlessOfRemainingHitPoints()
+        {
+            var state = new TargetHitState(0.1f, 0.2f, 0.3f, respawns: false, hitPoints: 5);
+            Assert.IsTrue(state.TryHit(isCritical: true));
+            Assert.AreEqual(0, state.RemainingHitPoints, "ヘッドショットは残り被弾可能回数を無視すること");
+            state.Tick(0.1f); // Flash終了 -> 致命傷なのでKnockDownへ
+            Assert.AreEqual(TargetHitState.Phase.KnockDown, state.CurrentPhase);
+        }
+
+        [Test]
         public void MultiHitTargetKnocksDownOnFinalHit()
         {
             var state = new TargetHitState(0.1f, 0.2f, 0.3f, respawns: false, hitPoints: 2);

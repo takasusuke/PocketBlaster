@@ -121,6 +121,11 @@ namespace PocketBlaster.EditorTools
             ObstacleFactory.CreateBox("Obstacle_Wave1_Wall", new Vector3(2.5f, 0f, 4f), 0.5f, 1.6f, new Color(0.4f, 0.4f, 0.45f));
             ObstacleFactory.CreateBox("Obstacle_Wave2_LowBox", new Vector3(1.5f, 0f, 4f), 0.6f, 0.4f, new Color(0.6f, 0.45f, 0.3f));
             ObstacleFactory.CreateBox("Obstacle_Wave3_LowBox", new Vector3(-1.5f, 0f, 5f), 0.6f, 0.4f, new Color(0.6f, 0.45f, 0.3f));
+            // 足場(オーナー要望2026-09-06:「あまりに高いところから飛び降りる場合には
+            // ダメージが入るようにしてください」を試すための高低差。stepUpHeightを
+            // 無視して常に登れる(Obstacle.IsPlatform)。安全な高さ(1.5m)を超える
+            // 3mから飛び降りると落下ダメージが発生する。
+            ObstacleFactory.CreateBox("Obstacle_Platform", new Vector3(3f, 0f, 6f), 1f, 3f, new Color(0.5f, 0.5f, 0.55f), isPlatform: true);
 
             var rigGo = new GameObject("GyroAimTestRig");
             // PhoneControllerServerは永続シングルトン(GetOrCreate)経由で取得する。
@@ -139,7 +144,6 @@ namespace PocketBlaster.EditorTools
             directorSo.FindProperty("stageCamera").objectReferenceValue = camera;
             directorSo.FindProperty("moveTarget").objectReferenceValue = playerRigGo.transform;
             directorSo.FindProperty("reticleController").objectReferenceValue = reticleController;
-            directorSo.FindProperty("playerLocomotion").objectReferenceValue = locomotion;
 
             var wavesProp = directorSo.FindProperty("waves");
             wavesProp.arraySize = 5;

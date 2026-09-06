@@ -31,15 +31,21 @@ namespace PocketBlaster.Gameplay
     /// それより高ければ移動そのものをブロックする(ObstacleCrossing参照)。
     /// 物理エンジン(CharacterController等)には頼らない割り切った実装。
     ///
-    /// このゲームは「オンレール式」が決定済み事項(docs/requirements.md §1)なので、
-    /// 大きなワープのような移動はできず、`movableRoot`の初期位置から`maxOffsetRadius`を
-    /// 超えて離れられないようPlayerOffsetStateでクランプする — ウェーブ間の大きな移動は
-    /// 引き続きStageDirectorが担う。
+    /// 「オンレール式」だった決定済み事項(docs/requirements.md §1)は、オーナー指示
+    /// (2026-09-06:「自由に歩き回るようにします」)により撤回した。`maxOffsetRadius`を
+    /// フィールド全体を歩き回れる大きさまで広げてあり、StageDirectorはもうプレイヤーの
+    /// 位置・向きを動かさない(ウェーブ間の自動カメラ移動は廃止済み)。`PlayerOffsetState`
+    /// による半径クランプ自体は残しているが、これは「無限に歩けるわけではなく、
+    /// 床(GroundFactory)の範囲内に留める」ための緩い安全策という位置づけに変わった。
     ///
     /// `movableRoot`未指定時はこのGameObject自身を動かす。StageDirectorと共存する場合は、
-    /// カメラをStageDirectorが動かす親(Rig)の子にし、`movableRoot`にカメラのTransformを
-    /// 指定する — 親(Rigのウェーブ間Lerp)と子(このステップ移動・視界回転)が同じ
-    /// Transformの同じプロパティを取り合わないようにするため。
+    /// カメラを`GyroAimTestRig`等の子にし、`movableRoot`にカメラのTransformを指定する。
+    ///
+    /// 落下ダメージ(オーナー要望2026-09-06:「あまりに高いところから飛び降りる場合には
+    /// ダメージが入るようにしてください」)。`climbHeight`(足場に乗っている高さ)が
+    /// 前回より`fallDamageSafeHeight`を超えて下がった瞬間に<see cref="OnFallDamage"/>を
+    /// 発火する。量の計算はUnity非依存のFallDamageCalculatorに委譲する
+    /// (GameSession側でアーケードモードのみHPへ反映)。
     /// </summary>
     public class PlayerLocomotion : MonoBehaviour
     {
@@ -48,11 +54,18 @@ namespace PocketBlaster.Gameplay
         // オーナー要望2026-09-06「プレイヤーの移動速度を速めてください」を受けて
         // 0.3→0.7に引き上げた(1歩ぶんの移動距離)。
         [SerializeField] private float stepDistance = 0.7f;
-        [SerializeField] private float maxOffsetRadius = 9f;
+        // 「自由に歩き回るようにします」(2026-09-06)を受けて9m→30mに拡大。
+        // GroundFactoryで敷いた床の範囲に収まる程度の緩い上限。
+        [SerializeField] private float maxOffsetRadius = 30f;
         [SerializeField] private float moveTiltDeadzoneDegrees = 5f;
         [SerializeField] private float moveTiltMaxDegrees = 30f;
         [SerializeField] private float maxLookPitchDegrees = 60f;
         [SerializeField] private float stepUpHeight = 0.6f;
+        [SerializeField] private float fallDamageSafeHeight = 1.5f;
+        [SerializeField] private float fallDamagePerMeter = 20f;
+
+        /// <summary>落下ダメージが発生した瞬間に1回だけ呼ばれる。引数はダメージ量。</summary>
+        public event System.Action<int> OnFallDamage;
 
         private PhoneControllerServer _server;
         private PlayerOffsetState _offsetState;
@@ -62,27 +75,10 @@ namespace PocketBlaster.Gameplay
         private float _lookRefGamma;
         private float _lookYaw;
         private float _lookPitch;
-
-        private bool _isInitialized;
+        private float _previousClimbHeight;
 
         private void Awake()
         {
-            EnsureInitialized();
-        }
-
-        /// <summary>
-        /// Unityは異なるコンポーネント間でのAwake()の実行順序を保証しない。
-        /// StageDirector.Awake()がStartNextWave()経由でこちらのResetForNewWave()を
-        /// 呼ぶ時、このコンポーネント自身のAwake()がまだ実行されていない場合があり、
-        /// _offsetStateが未初期化のままNullReferenceExceptionになっていた
-        /// (2026-09-06、オーナー報告)。Awake()からもResetForNewWave()からも呼べる
-        /// 初期化をここにまとめ、二重実行を防ぐ。
-        /// </summary>
-        private void EnsureInitialized()
-        {
-            if (_isInitialized) return;
-            _isInitialized = true;
-
             // GetComponentではなくGetOrCreate() — PhoneControllerServerはシーンをまたぐ
             // 永続シングルトン(2026-09-06、再挑戦での接続断対応。PhoneControllerServer.cs参照)。
             _server = PhoneControllerServer.GetOrCreate();
@@ -97,22 +93,6 @@ namespace PocketBlaster.Gameplay
         private void OnDestroy()
         {
             if (_server != null) _server.OnStep -= HandleStep;
-        }
-
-        /// <summary>
-        /// ウェーブが切り替わる時にStageDirectorから呼ぶ。視界回転・移動オフセットを
-        /// 両方リセットしないと、前のウェーブで振り向いた向きや動いた位置のまま新しい
-        /// ウェーブのカメラ位置に合流してしまい、敵が正面ではなく横に見える等の混乱を
-        /// 招く(移動範囲が2.5m→9mに広がったことで顕在化しうる問題、2026-09-06)。
-        /// </summary>
-        public void ResetForNewWave()
-        {
-            EnsureInitialized();
-            _offsetState.Reset();
-            _lookYaw = 0f;
-            _lookPitch = 0f;
-            movableRoot.localPosition = Vector3.zero;
-            movableRoot.localRotation = Quaternion.identity;
         }
 
         private void Update()
@@ -184,11 +164,28 @@ namespace PocketBlaster.Gameplay
         private void TryMoveTo(Vector3 prospectiveOffset)
         {
             var blocking = FindOverlappingObstacle(prospectiveOffset);
-            var crossing = ObstacleCrossing.Evaluate(blocking != null, blocking != null ? blocking.Height : 0f, stepUpHeight);
-            if (crossing == ObstacleCrossingResult.Blocked) return;
+            float climbHeight;
+            if (blocking != null && blocking.IsPlatform)
+            {
+                // 足場は高さに関わらず常に登れる(stepUpHeightの判定を経由しない、
+                // 落下ダメージを試せる高低差を作るための特別扱い。Obstacle.IsPlatform参照)。
+                climbHeight = blocking.Height;
+            }
+            else
+            {
+                var crossing = ObstacleCrossing.Evaluate(blocking != null, blocking != null ? blocking.Height : 0f, stepUpHeight);
+                if (crossing == ObstacleCrossingResult.Blocked) return;
+                climbHeight = crossing == ObstacleCrossingResult.StepUp ? blocking.Height : 0f;
+            }
+
+            var drop = _previousClimbHeight - climbHeight;
+            if (drop > fallDamageSafeHeight)
+            {
+                OnFallDamage?.Invoke(FallDamageCalculator.ComputeDamage(drop, fallDamageSafeHeight, fallDamagePerMeter));
+            }
+            _previousClimbHeight = climbHeight;
 
             _offsetState.SetOffset(prospectiveOffset);
-            var climbHeight = crossing == ObstacleCrossingResult.StepUp ? blocking.Height : 0f;
             movableRoot.localPosition = new Vector3(prospectiveOffset.x, climbHeight, prospectiveOffset.z);
         }
 

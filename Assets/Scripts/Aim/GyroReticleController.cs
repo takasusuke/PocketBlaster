@@ -50,6 +50,14 @@ namespace PocketBlaster.Aim
         [SerializeField] private LayerMask hitLayerMask = ~0;
         [SerializeField] private float maxHitDistance = 1000f;
 
+        // リコイル(オーナー要望、2026-09-06:「反動と、その反動コントロール要素として...」)。
+        // 発射のたびにレティクルを画面上方向へ瞬間的に跳ね上げ、時間経過で基準の狙点まで
+        // 戻す。連射するほど蓄積し、戻る速さより速く連射すると狙点が上へずれ続ける —
+        // 実銃のリコイルコントロール(意図的に少し下を狙う)と同じ操作を要求する設計。
+        [SerializeField] private float recoilKickPixels = 45f;
+        [SerializeField] private float recoilRecoverySpeedPixelsPerSecond = 260f;
+        private float _recoilOffsetPixels;
+
         /// <summary>
         /// PC上でマウスでも狙えるようにする(オーナー要望、2026-09-06:「あくまでデバッグを
         /// 容易にするため」)。実機(スマホ)が無くてもPlay Modeだけで狙撃・命中判定を
@@ -206,6 +214,10 @@ namespace PocketBlaster.Aim
             var isAimActive = IsMouseDebugActive || _server.IsAiming;
             SetReticleColor(isAimActive ? AimReticleColor : LookCursorColor);
 
+            // リコイルは常に基準へ向けて減衰させる(構えていない間も蓄積が残ったままに
+            // ならないように)。
+            _recoilOffsetPixels = Mathf.MoveTowards(_recoilOffsetPixels, 0f, recoilRecoverySpeedPixelsPerSecond * Time.deltaTime);
+
             float x, y;
             if (isAimActive)
             {
@@ -214,14 +226,15 @@ namespace PocketBlaster.Aim
                     // UI Toolkitは左上原点・下方向がプラスだが、Input.mousePositionは
                     // 左下原点・上方向がプラスなのでYを反転する。
                     x = Mathf.Clamp(Input.mousePosition.x, 0, Screen.width);
-                    y = Mathf.Clamp(Screen.height - Input.mousePosition.y, 0, Screen.height);
+                    y = Mathf.Clamp(Screen.height - Input.mousePosition.y - _recoilOffsetPixels, 0, Screen.height);
                 }
                 else
                 {
                     var halfW = Screen.width / 2f;
                     var halfH = Screen.height / 2f;
                     x = Mathf.Clamp(halfW + _offsetX, 0, Screen.width);
-                    y = Mathf.Clamp(halfH + _offsetY, 0, Screen.height);
+                    // リコイルぶんだけ上(Yは小さいほど画面上)へ跳ね上げる。
+                    y = Mathf.Clamp(halfH + _offsetY - _recoilOffsetPixels, 0, Screen.height);
                 }
             }
             else
@@ -315,6 +328,9 @@ namespace PocketBlaster.Aim
             _lastShotResult = didHit ? "命中" : "はずれ";
             OnShotResolved?.Invoke(didHit);
 
+            // リコイル(次弾の狙点を上へ跳ね上げる。今撃った弾の命中判定には影響しない)。
+            _recoilOffsetPixels += recoilKickPixels;
+
             if (_ammo.CurrentAmmo == 0)
             {
                 // 残弾0での自動リロード(オーナー要望、2026-09-06)。狙いの基準の取り直し
@@ -379,11 +395,31 @@ namespace PocketBlaster.Aim
 
             var ray = aimRay.Value;
 
+            // ヘッドショット判定(オーナー要望、2026-09-06:「反動コントロール要素として、
+            // 敵のヘッドショットなど部位別のダメージ量変化」)。頭部コライダー(HeadHitbox)
+            // は本体コライダーと奥行きがほぼ同じで前後関係が不安定なため、RaycastAllで
+            // 視線上の全ヒットを見て、頭部が含まれていれば距離に関わらず優先する。
+            var hits = Physics.RaycastAll(ray, maxHitDistance, hitLayerMask);
+            // RaycastAllは順序を保証しないため、距離順に並べてから見る
+            // (複数の敵が視線上に重なっている場合に手前を優先するため)。
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+
+            foreach (var candidate in hits)
+            {
+                var headHitbox = candidate.collider.GetComponent<HeadHitbox>();
+                if (headHitbox != null && headHitbox.Target != null && headHitbox.Target.IsHittable)
+                {
+                    headHitbox.Target.TakeHeadshot();
+                    _audioSource.PlayOneShot(_hitClip);
+                    return true;
+                }
+            }
+
             // TargetとPickupはどちらもIShootable(共通の狙撃対象契約、IShootable.cs参照)
             // なので、ここでは種類を区別せず同じ判定にまとめている。
-            if (Physics.Raycast(ray, out var hit, maxHitDistance, hitLayerMask))
+            foreach (var candidate in hits)
             {
-                var shootable = hit.collider.GetComponentInParent<IShootable>();
+                var shootable = candidate.collider.GetComponentInParent<IShootable>();
                 if (shootable != null && shootable.IsHittable)
                 {
                     shootable.TakeHit();
@@ -434,6 +470,7 @@ namespace PocketBlaster.Aim
             _refGamma = _server.LatestGamma;
             _isCalibrated = true;
             _timeSinceReload = 0f;
+            _recoilOffsetPixels = 0f;
         }
 
         private void BuildUi()
