@@ -414,8 +414,10 @@ namespace PocketBlaster.Aim
 
             // 判定そのものはAimHitResolverへ委譲する(2026-09-07、マルチプレイヤーモード
             // 追加に伴い、MultiplayerAimControllerと共有するために切り出した。振る舞いは
-            // 変えていない——効果音の再生だけこちら側の責務として残す)。
-            var result = AimHitResolver.TryHit(aimRay.Value, maxHitDistance, hitLayerMask);
+            // 変えていない——効果音の再生だけこちら側の責務として残す)。何に当たったかは
+            // シングルプレイヤーでは使わない(アイテムの効果適用はStageDirector.
+            // HandlePickupConsumedがPickup.OnConsumed経由で別途行っている)。
+            var result = AimHitResolver.TryHit(aimRay.Value, maxHitDistance, hitLayerMask, out _);
             if (result == AimHitResolver.Result.Miss)
             {
                 _audioSource.PlayOneShot(_missClip);

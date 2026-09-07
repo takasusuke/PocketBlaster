@@ -29,9 +29,17 @@ namespace PocketBlaster.Aim
         /// 全ヒットを見て、頭部が含まれていれば距離に関わらず優先する。
         /// TargetとPickupはどちらもIShootable(共通の狙撃対象契約、IShootable.cs参照)
         /// なので、頭部以外はここで種類を区別せず同じ判定にまとめる。
+        ///
+        /// <paramref name="hitShootable"/>には命中した対象(Target/Pickup等)を返す
+        /// (2026-09-07、マルチプレイヤーのアイテム対応で追加)。マルチプレイヤーは
+        /// Pickup(アイテム)の効果を「誰が撃ったか」で振り分ける必要があり
+        /// (MultiplayerAimController参照)、そのために何に当たったかを呼び出し側が
+        /// 判定できるようにした。GyroReticleControllerは`out _`で無視してよい
+        /// (振る舞いは変えていない)。
         /// </summary>
-        public static Result TryHit(Ray ray, float maxDistance, LayerMask layerMask)
+        public static Result TryHit(Ray ray, float maxDistance, LayerMask layerMask, out IShootable hitShootable)
         {
+            hitShootable = null;
             var hits = Physics.RaycastAll(ray, maxDistance, layerMask);
             // RaycastAllは順序を保証しないため、距離順に並べてから見る
             // (複数の敵が視線上に重なっている場合に手前を優先するため)。
@@ -43,6 +51,7 @@ namespace PocketBlaster.Aim
                 if (headHitbox != null && headHitbox.Target != null && headHitbox.Target.IsHittable)
                 {
                     headHitbox.Target.TakeHeadshot();
+                    hitShootable = headHitbox.Target;
                     return Result.Headshot;
                 }
             }
@@ -53,6 +62,7 @@ namespace PocketBlaster.Aim
                 if (shootable != null && shootable.IsHittable)
                 {
                     shootable.TakeHit();
+                    hitShootable = shootable;
                     return Result.Hit;
                 }
             }

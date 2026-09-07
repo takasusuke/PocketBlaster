@@ -21,15 +21,27 @@ namespace PocketBlaster.Gameplay
     /// 受けて`AddComponent`し、直後に<see cref="Initialize"/>を呼ぶ(`PickupFactory`が
     /// `Pickup.Initialize`を呼ぶのと同じパターン)。狙撃判定そのものは
     /// `AimHitResolver`(GyroReticleControllerと共有)に委譲する。
+    ///
+    /// アイテム(Pickup)の効果は「誰が撃ったか」で振り分ける(2026-09-07、オーナー要望
+    /// 「アイテムを実装して」)。弾薬回復(Reload)・最大弾薬数増加(AmmoUp)は撃った
+    /// 本人の`AmmoState`へ直接反映する。体力回復(Health)は個人ではなく共有のHPプール
+    /// (`MultiplayerStageDirector`が持つ)を回復するため、<see cref="OnHealthPickupCollected"/>
+    /// で中継する——シングルプレイヤーの`StageDirector.OnHealthPickupCollected`と
+    /// 同じ役割を、シングルトンではなくプレイヤーごとのインスタンスで担う形。
     /// </summary>
     [RequireComponent(typeof(AudioSource))]
     public class MultiplayerAimController : MonoBehaviour
     {
         [SerializeField] private int magazineSize = 6;
         [SerializeField] private float reloadDurationSeconds = 0.6f;
+        [SerializeField] private int ammoUpAmount = 2;
         [SerializeField] private Camera aimCamera;
         [SerializeField] private LayerMask hitLayerMask = ~0;
         [SerializeField] private float maxHitDistance = 1000f;
+
+        /// <summary>このプレイヤーが体力回復アイテムを撃った瞬間に中継される。
+        /// `MultiplayerStageDirector`が購読し、共有HPプールを回復する。</summary>
+        public event System.Action OnHealthPickupCollected;
 
         private static readonly Color AmmoPipFilledColor = new Color(1f, 0.75f, 0.15f);
         private static readonly Color AmmoPipEmptyColor = new Color(1f, 1f, 1f, 0.18f);
@@ -203,13 +215,32 @@ namespace PocketBlaster.Gameplay
             }
             else
             {
-                var result = AimHitResolver.TryHit(aimRay.Value, maxHitDistance, hitLayerMask);
+                var result = AimHitResolver.TryHit(aimRay.Value, maxHitDistance, hitLayerMask, out var hitShootable);
                 _audioSource.PlayOneShot(result == AimHitResolver.Result.Miss ? _missClip : _hitClip);
+                if (hitShootable is Pickup pickup) ApplyPickupEffect(pickup.Type);
             }
 
             if (_ammo.CurrentAmmo == 0 && !_isReloading)
             {
                 StartCoroutine(ReloadRoutine());
+            }
+        }
+
+        /// <summary>撃った本人の効果として反映するか(Reload/AmmoUp)、共有HPプールへ
+        /// 中継するか(Health)を振り分ける。</summary>
+        private void ApplyPickupEffect(PickupType type)
+        {
+            switch (type)
+            {
+                case PickupType.Reload:
+                    _ammo.Reload();
+                    break;
+                case PickupType.AmmoUp:
+                    _ammo.IncreaseMagazineSize(ammoUpAmount);
+                    break;
+                case PickupType.Health:
+                    OnHealthPickupCollected?.Invoke();
+                    break;
             }
         }
 

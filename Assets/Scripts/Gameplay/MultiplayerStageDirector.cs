@@ -26,7 +26,13 @@ namespace PocketBlaster.Gameplay
     /// `PlayerSlotAssigner`でスロット(0/1、色分け)を割り当て、
     /// `MultiplayerAimController`を動的に生成/破棄することで扱う。
     ///
-    /// v1のスコープ外(計画時に明示): アイテム(Pickup)、プレイヤーごとの感度設定、
+    /// アイテム(Pickup)はシングルプレイヤーの`StageDirector.MaybeSpawnPickup`と同じ
+    /// 仕組みで出現させる(2026-09-07、オーナー要望「アイテムを実装して」で追加、
+    /// 計画時点ではv1スコープ外としていた)。効果の振り分けは`MultiplayerAimController`
+    /// 側で行う(誰が撃ったかを知っているのはあちら) — 弾薬回復/最大弾薬数増加は
+    /// 撃った本人へ、体力回復は`OnHealthPickupCollected`経由でこちらの共有HPへ。
+    ///
+    /// v1のスコープ外(計画時に明示、変更なし): プレイヤーごとの感度設定、
     /// 3人以上への拡張。
     /// </summary>
     public class MultiplayerStageDirector : MonoBehaviour
@@ -51,12 +57,15 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private float cameraMoveDurationSeconds = 1.5f;
         [SerializeField] private int maxHealth = 150;
         [SerializeField] private int enemyContactDamage = 25;
+        [SerializeField] private int healthPickupHealAmount = 30;
+        [SerializeField, Range(0f, 1f)] private float pickupSpawnChance = 0.5f;
         [SerializeField] private float returnToTitleDelaySeconds = 5f;
         [SerializeField] private int playerCapacity = 2;
 
         private PhoneControllerServer _server;
         private PlayerSlotAssigner _slotAssigner;
         private readonly Dictionary<int, MultiplayerAimController> _aimControllers = new Dictionary<int, MultiplayerAimController>();
+        private Pickup _currentPickup;
 
         private StageProgressState _progress;
         private ScoreState _score;
@@ -141,6 +150,7 @@ namespace PocketBlaster.Gameplay
             var go = new GameObject($"MultiplayerAimController_Player{slot.Value + 1}");
             var controller = go.AddComponent<MultiplayerAimController>();
             controller.Initialize(connectionId, slot.Value, PlayerColors[slot.Value], _server);
+            controller.OnHealthPickupCollected += HandleHealthPickupCollected;
             _aimControllers[connectionId] = controller;
 
             _server.SendToPlayer(connectionId, $"{{\"type\":\"welcome\",\"color\":\"{PlayerColorNames[slot.Value]}\"}}");
@@ -151,9 +161,22 @@ namespace PocketBlaster.Gameplay
             _slotAssigner.Release(connectionId);
             if (_aimControllers.TryGetValue(connectionId, out var controller))
             {
-                if (controller != null) Destroy(controller.gameObject);
+                if (controller != null)
+                {
+                    controller.OnHealthPickupCollected -= HandleHealthPickupCollected;
+                    Destroy(controller.gameObject);
+                }
                 _aimControllers.Remove(connectionId);
             }
+        }
+
+        /// <summary>体力回復アイテムを撃った本人ではなく、共有HPプールへ反映する
+        /// (オーナー確認2026-09-06:「共有の体力・残機を持たせる」)。</summary>
+        private void HandleHealthPickupCollected()
+        {
+            if (_isGameOver) return;
+            _health.Heal(healthPickupHealAmount);
+            UpdateHealthBar();
         }
 
         // ------------------------------------------------------------- ウェーブ進行
@@ -176,12 +199,58 @@ namespace PocketBlaster.Gameplay
             }
 
             UpdateWaveLabel();
+            MaybeSpawnPickup(wave);
 
             if (wave.cameraWaypoint != null)
             {
                 if (_cameraMoveRoutine != null) StopCoroutine(_cameraMoveRoutine);
                 _cameraMoveRoutine = StartCoroutine(MoveCameraTo(wave.cameraWaypoint.position, wave.cameraWaypoint.rotation));
             }
+        }
+
+        /// <summary>
+        /// ウェーブ開始時に一定確率でアイテムを1個出現させる(シングルプレイヤーの
+        /// StageDirector.MaybeSpawnPickupと同じ仕組み、2026-09-07、オーナー要望
+        /// 「アイテムを実装して」)。マルチプレイヤーには残機の概念(カジュアル/
+        /// アーケードの区別)が無いため、体力回復も常に候補に入れる。
+        /// </summary>
+        private void MaybeSpawnPickup(Wave wave)
+        {
+            if (Random.value > pickupSpawnChance) return;
+
+            var origin = wave.cameraWaypoint != null ? wave.cameraWaypoint : moveTarget;
+            var depth = Random.Range(8f, 14f);
+            var xOffset = Random.Range(-4f, 4f);
+            var position = origin.position + origin.forward * depth + Vector3.right * xOffset;
+            position.y = 1.6f;
+
+            _currentPickup = PickupFactory.Create(ChooseRandomPickupType(), position);
+            _currentPickup.OnConsumed += HandlePickupConsumed;
+        }
+
+        private static PickupType ChooseRandomPickupType()
+        {
+            var options = new[] { PickupType.Health, PickupType.Reload, PickupType.AmmoUp };
+            return options[Random.Range(0, options.Length)];
+        }
+
+        /// <summary>
+        /// 効果の実際の適用は撃った本人(MultiplayerAimController)側で行う——ここでは
+        /// 出現管理の後片付け(購読解除・参照クリア)だけ。
+        /// </summary>
+        private void HandlePickupConsumed(Pickup pickup)
+        {
+            pickup.OnConsumed -= HandlePickupConsumed;
+            if (_currentPickup == pickup) _currentPickup = null;
+        }
+
+        /// <summary>ウェーブが切り替わる時、取り残されたアイテムは片付ける。</summary>
+        private void ClearCurrentPickup()
+        {
+            if (_currentPickup == null) return;
+            _currentPickup.OnConsumed -= HandlePickupConsumed;
+            Destroy(_currentPickup.gameObject);
+            _currentPickup = null;
         }
 
         /// <summary>移動オート(オーナー確認2026-09-06「画面は共通で移動はオートとして」)。
@@ -231,6 +300,7 @@ namespace PocketBlaster.Gameplay
                     var approach = enemy.GetComponent<EnemyApproach>();
                     if (approach != null) approach.OnReachedPlayer -= HandleEnemyReachedPlayer;
                 }
+                ClearCurrentPickup();
                 StartNextWave();
             }
         }

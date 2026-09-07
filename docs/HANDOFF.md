@@ -17,6 +17,26 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## マルチプレイヤーにアイテム(Pickup)を追加（2026-09-07）
+
+マルチプレイヤーモード実装時にv1スコープ外としていたアイテムを、オーナー要望
+「アイテムを実装して」を受けて追加した。
+
+- `AimHitResolver.TryHit`に`out IShootable hitShootable`引数を追加し、命中した
+  対象そのものを呼び出し側が受け取れるようにした。マルチプレイヤーは「誰が撃ったか」
+  でアイテム効果を振り分ける必要がある(弾薬回復・最大弾薬数増加は撃った本人、
+  体力回復は共有HP)ため、`Result`(Miss/Hit/Headshot)だけでは判定できなかった。
+  シングルプレイヤー側(`GyroReticleController`)は`out _`で無視するだけで振る舞いは
+  変えていない。
+- `MultiplayerStageDirector`にシングルプレイヤーの`StageDirector.MaybeSpawnPickup`
+  と同じ出現ロジックを追加(ウェーブ開始時に確率でアイテムを1個出現)。
+- `MultiplayerAimController.HandleShoot`が`AimHitResolver`の戻り値からPickupを
+  検出したら、弾薬回復/最大弾薬数増加は自分の`AmmoState`へ直接反映、体力回復は
+  `OnHealthPickupCollected`イベントで`MultiplayerStageDirector`の共有HPへ中継する。
+- **確認方法**: EditMode 68件全て通過。Milestone3(AimHitResolver呼び出し側の
+  スモークチェック)・MultiplayerCoop(新規フィールド反映)を再ビルド。**実機での
+  アイテム取得・効果適用の確認は未実施**。
+
 ## マルチプレイヤーモード新設（2026-09-07）
 
 オーナーへ将来拡張として2方向（a: 画面分割+各自移動、b: 画面共有+移動オート+各自
