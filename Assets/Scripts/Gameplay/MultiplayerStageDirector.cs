@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using PocketBlaster.Audio;
 using PocketBlaster.Networking;
 using PocketBlaster.UI;
 using UnityEngine;
@@ -101,6 +102,10 @@ namespace PocketBlaster.Gameplay
             _accuracy = new ShotAccuracyState();
             _health = new PlayerHealthState(maxHealth);
             _highScorePrefsKey = $"PocketBlaster.HighScore.{gameObject.scene.name}";
+
+            // BGM(2026-09-08、オーナー要望「同様のアーケードゲームと比べて...実装する」)。
+            // シングルプレイヤー系はGameSessionが同じ曲を鳴らす(GameSession.cs参照)。
+            BgmPlayer.GetOrCreate().PlayLoop(Resources.Load<AudioClip>("Audio/BGM/action_loop"));
 
             var enemyCounts = new int[waves.Length];
             for (var i = 0; i < waves.Length; i++)

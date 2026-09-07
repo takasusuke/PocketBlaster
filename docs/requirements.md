@@ -86,12 +86,20 @@ Point Blank等の**体験全体**(得点・演出・進行・音)と比べた時
   「タイトルへ戻る」が一時停止中も常時有効(実は既に動く)ことが伝わらなかった。
   文言に「もう一度押すと再開、「再挑戦」「タイトルへ戻る」も選べます」を足しただけ
   ——新しい仕組みは増やしていない。
+- **BGM(ステージ中の音楽)**: `~/AIFiles`のBGM自作パイプライン(Issue #24、
+  `docs/bgm-generation.md`)を流用し、2曲(`title`=起動画面用・`action`=ステージ/
+  マルチプレイヤー共通)をprocedural作曲→MIDI→FluidSynthレンダリングで生成した
+  (`~/AIFiles/scripts/generate_pocketblaster_bgm_set.py`、新規)。世界観
+  (「怖くないもの」、§1)に合わせ、ホラー調に振り切らないdorian/phrygianの
+  マイナー調で作曲した。`BgmPlayer`(新規、`PhoneControllerServer`と同じ永続
+  シングルトン設計)がシーンをまたいでループ再生し、`GameSession`
+  (Milestone3/4・Stage2・PracticeRange共通)・`TitleScreenController`・
+  `MultiplayerStageDirector`がそれぞれ自分の曲で`PlayLoop`を呼ぶ。SE音量とは別に
+  `BgmVolume`設定(既定0.6、起動画面にスライダー追加)を新設した。
+  **未検証**: 実機での音量バランス・曲そのものの評価(procedural作曲の初回聴取)。
+  ボス専用BGM等、ステージ内での曲切り替えは今回のスコープ外。
 
 **次に検討する候補(未着手、優先度はオーナー判断に委ねず全部やる方針——CLAUDE.md §9a）**:
-- **BGM(ステージ中の音楽)**: 現状は効果音(`ProceduralSfx`の短音のみ)で、ループ音楽が
-  一切無い。アーケードシューティングの体験として最も大きい欠落。`~/AIFiles`に
-  BGM自作パイプライン(Issue #24、`docs/bgm-generation.md`)が既にあるため、
-  そちらを流用して着手できる見込み。
 - **敵の遠距離攻撃**: 現状の敵(`EnemyApproach`)は近づくだけで、House of the Dead等の
   ような「敵が撃ち返してくる/攻撃してくる」演出が無い。プレイヤーへの被弾がすべて
   「近づかれ過ぎた」の一種類しか無く単調。

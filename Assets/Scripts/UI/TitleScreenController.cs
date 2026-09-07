@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PocketBlaster.Audio;
 using PocketBlaster.Meta;
 using PocketBlaster.Networking;
 using UnityEngine;
@@ -61,6 +62,7 @@ namespace PocketBlaster.UI
         private Button _casualButton;
         private Button _arcadeButton;
         private Label _sfxVolumeLabel;
+        private Label _bgmVolumeLabel;
         private Label _verticalSensitivityLabel;
         private Label _horizontalSensitivityLabel;
         private Label _lookSensitivityLabel;
@@ -86,6 +88,12 @@ namespace PocketBlaster.UI
             _server = PhoneControllerServer.GetOrCreate();
             _server.OnReload += HandlePhoneCalibrate;
             _server.OnShoot += HandlePhoneShoot;
+
+            // BGM(2026-09-08、オーナー要望「同様のアーケードゲームと比べて機能や
+            // UIやUXで足りていない部分を...実装する」)。BgmPlayerも同じ永続
+            // シングルトンパターン(PhoneControllerServer参照)——ステージから
+            // タイトルへ戻った時に自然に切り替わる。
+            BgmPlayer.GetOrCreate().PlayLoop(Resources.Load<AudioClip>("Audio/BGM/title_loop"));
         }
 
         private void OnDestroy()
@@ -250,6 +258,21 @@ namespace PocketBlaster.UI
             panel.Add(sfxSlider);
             UpdateSfxVolumeLabel();
 
+            // BGM音量(オーナー要望2026-09-08:「同様のアーケードゲームと比べて機能や
+            // UIやUXで足りていない部分を...実装する」——BGM新設に伴い、SE音量とは
+            // 別に調整できるようにした)。
+            _bgmVolumeLabel = BuildValueLabel();
+            panel.Add(_bgmVolumeLabel);
+            var bgmSlider = new Slider(0f, 1f) { value = GameSettings.Current.BgmVolume };
+            bgmSlider.style.marginBottom = 16;
+            bgmSlider.RegisterValueChangedCallback(evt =>
+            {
+                GameSettings.SetBgmVolume(evt.newValue);
+                UpdateBgmVolumeLabel();
+            });
+            panel.Add(bgmSlider);
+            UpdateBgmVolumeLabel();
+
             // 上下・左右で別々に調整できるようにする(オーナー要望、2026-09-06:
             // 「上下左右方向の感度をユーザごとに調整できるようにしてください」)。
             _verticalSensitivityLabel = BuildValueLabel();
@@ -330,6 +353,11 @@ namespace PocketBlaster.UI
         private void UpdateSfxVolumeLabel()
         {
             _sfxVolumeLabel.text = $"SE音量: {Mathf.RoundToInt(GameSettings.Current.SfxVolume * 100)}%";
+        }
+
+        private void UpdateBgmVolumeLabel()
+        {
+            _bgmVolumeLabel.text = $"BGM音量: {Mathf.RoundToInt(GameSettings.Current.BgmVolume * 100)}%";
         }
 
         private void UpdateVerticalSensitivityLabel()

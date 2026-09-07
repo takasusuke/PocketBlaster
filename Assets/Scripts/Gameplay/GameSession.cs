@@ -1,5 +1,6 @@
 using System.Collections;
 using PocketBlaster.Aim;
+using PocketBlaster.Audio;
 using PocketBlaster.Meta;
 using PocketBlaster.Networking;
 using PocketBlaster.UI;
@@ -79,6 +80,13 @@ namespace PocketBlaster.Gameplay
             if (reticleController == null) reticleController = GetComponent<GyroReticleController>();
             if (stageDirector == null) stageDirector = FindFirstObjectByType<StageDirector>();
             if (playerLocomotion == null) playerLocomotion = GetComponent<PlayerLocomotion>();
+
+            // BGM(2026-09-08、オーナー要望「同様のアーケードゲームと比べて機能や
+            // UIやUXで足りていない部分を...実装する」——効果音はあったがループ音楽が
+            // 無かった)。GameSessionはMilestone3/4・Stage2・PracticeRangeいずれにも
+            // 置かれているため、ここに置けばシングルプレイヤー系シーン全てをカバーできる
+            // (マルチプレイヤーはMultiplayerStageDirectorが同じ曲を鳴らす)。
+            BgmPlayer.GetOrCreate().PlayLoop(Resources.Load<AudioClip>("Audio/BGM/action_loop"));
 
             _mode = GameSettings.Current.IsArcadeMode ? Mode.Arcade : Mode.Casual;
             _health = new PlayerHealthState(maxHealth);

@@ -17,6 +17,42 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第4弾: BGM新設（2026-09-08）
+
+「機能・UI/UXの比較」で最大の欠落としていたBGMに着手した。`~/AIFiles`の
+BGM自作パイプライン(Issue #24、`docs/bgm-generation.md`)をそのまま流用——
+新規エンジン開発は不要だった。
+
+- **作曲**: `~/AIFiles/scripts/generate_pocketblaster_bgm_set.py`(新規、他ジャンルの
+  `generate_<genre>_bgm_set.py`と同じ構造)が`bgm_engine.py`の`build_track`を呼び、
+  `title`(dorian、tempo116、festive_pulse)・`action`(phrygian、tempo142、driving)の
+  2曲をfull+loop(4ファイル)でMIDI出力する。`~/AIFiles/assets/BGM/pocket_blaster/`
+  が正本。ホラー調に振り切らないよう、他ジャンルのdungeon/boss系より控えめな
+  note_densityに留めた(§1「怖くないもの」)。
+- **レンダリング**: 既存の`scripts/render_bgm_to_audio.py`をこのマシンの
+  FluidSynth/サウンドフォント(`~/.claude/CLAUDE.md`のマシン固有パス)でそのまま実行、
+  `Assets/Resources/Audio/BGM/`(ランタイムで`Resources.Load`するため)へ出力した。
+  `_loop`版(イントロ無し、ループ末尾が先頭と滑らかに繋がる`match_loop_seam`済み)
+  だけをUnityプロジェクトに置き、イントロ付きの`full`版は`~/AIFiles/assets/BGM/`側
+  にのみ残した(参考用、ゲーム内では使わない)。
+- **再生**: `BgmPlayer`(新規、`Assets/Scripts/Audio/`)が`PhoneControllerServer`と
+  同じ永続シングルトンパターンでシーンをまたいでループ再生する。同じクリップを
+  指定されたら何もしない(再挑戦でのシーン再読み込みのたびに曲頭へ戻らないように)。
+  `GameSession`(Milestone3/4・Stage2・PracticeRangeに共通して存在するため、
+  ここに置けば1箇所で全シングルプレイヤー系シーンをカバーできる)・
+  `TitleScreenController`・`MultiplayerStageDirector`がそれぞれ`PlayLoop`を呼ぶ。
+- **音量設定**: `GameSettingsState`に`BgmVolume`(既定0.6、SE音量より少し控えめ)を
+  新設し、起動画面にスライダーを追加した。`GameSettingsState`のコンストラクタ引数が
+  増えたため、既存の呼び出し箇所(`GameSettings.Load`・テスト)も合わせて更新した。
+- **import設定**: 新しく生成したWAV(7〜10MB)はUnityの既定(Decompress On Load)の
+  ままだと毎回全展開でメモリを圧迫するため、`BgmAudioImporter`(新規、
+  `PickupArtImporter`と同じパターン)でCompressed In Memory + Vorbis圧縮に矯正した。
+- **確認方法**: EditMode 83件(既存82+新規1)全て通過。新規`[SerializeField]`は
+  追加していないためシーン再ビルド不要。**実機での音量バランス・曲そのものの
+  聴取評価(procedural作曲なので初めて実際に鳴らして聴く)は未確認**——次回、
+  実際にUnity上で再生して確認すること。ボス専用BGM等の曲切り替えは今回のスコープ外
+  (`docs/requirements.md`「機能・UI/UXの比較」参照)。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第3弾: 一時停止中の選択肢を明示（2026-09-08）
 
 第1弾(コンボ・命中率・ヒットマーカー)・第2弾(アイテム出現時間制限)に続く同日3件目。

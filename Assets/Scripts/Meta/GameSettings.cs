@@ -18,6 +18,7 @@ namespace PocketBlaster.Meta
     {
         private const string ModeKey = "PocketBlaster.Settings.IsArcadeMode";
         private const string SfxVolumeKey = "PocketBlaster.Settings.SfxVolume";
+        private const string BgmVolumeKey = "PocketBlaster.Settings.BgmVolume";
         private const string VerticalSensitivityKey = "PocketBlaster.Settings.VerticalSensitivity";
         private const string HorizontalSensitivityKey = "PocketBlaster.Settings.HorizontalSensitivity";
         private const string LookSensitivityKey = "PocketBlaster.Settings.LookSensitivity";
@@ -45,6 +46,12 @@ namespace PocketBlaster.Meta
             Save();
         }
 
+        public static void SetBgmVolume(float value)
+        {
+            Current.SetBgmVolume(value);
+            Save();
+        }
+
         public static void SetVerticalSensitivity(float value)
         {
             Current.SetVerticalSensitivity(value);
@@ -69,6 +76,7 @@ namespace PocketBlaster.Meta
             return new GameSettingsState(
                 PlayerPrefs.GetInt(ModeKey, def.IsArcadeMode ? 1 : 0) == 1,
                 PlayerPrefs.GetFloat(SfxVolumeKey, def.SfxVolume),
+                PlayerPrefs.GetFloat(BgmVolumeKey, def.BgmVolume),
                 PlayerPrefs.GetFloat(VerticalSensitivityKey, def.VerticalSensitivity),
                 PlayerPrefs.GetFloat(HorizontalSensitivityKey, def.HorizontalSensitivity),
                 PlayerPrefs.GetFloat(LookSensitivityKey, def.LookSensitivity));
@@ -78,6 +86,7 @@ namespace PocketBlaster.Meta
         {
             PlayerPrefs.SetInt(ModeKey, Current.IsArcadeMode ? 1 : 0);
             PlayerPrefs.SetFloat(SfxVolumeKey, Current.SfxVolume);
+            PlayerPrefs.SetFloat(BgmVolumeKey, Current.BgmVolume);
             PlayerPrefs.SetFloat(VerticalSensitivityKey, Current.VerticalSensitivity);
             PlayerPrefs.SetFloat(HorizontalSensitivityKey, Current.HorizontalSensitivity);
             PlayerPrefs.SetFloat(LookSensitivityKey, Current.LookSensitivity);

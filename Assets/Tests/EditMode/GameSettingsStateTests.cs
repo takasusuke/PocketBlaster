@@ -72,12 +72,27 @@ namespace PocketBlaster.Tests.EditMode
         [Test]
         public void ConstructorAlsoClampsInvalidValues()
         {
-            var settings = new GameSettingsState(true, sfxVolume: 2f, verticalSensitivity: 1f, horizontalSensitivity: 999f, lookSensitivity: 1f);
+            var settings = new GameSettingsState(true, sfxVolume: 2f, bgmVolume: -1f, verticalSensitivity: 1f, horizontalSensitivity: 999f, lookSensitivity: 1f);
             Assert.IsTrue(settings.IsArcadeMode);
             Assert.AreEqual(1f, settings.SfxVolume);
+            Assert.AreEqual(0f, settings.BgmVolume);
             Assert.AreEqual(GameSettingsState.MinSensitivity, settings.VerticalSensitivity);
             Assert.AreEqual(GameSettingsState.MaxSensitivity, settings.HorizontalSensitivity);
             Assert.AreEqual(GameSettingsState.MinLookSensitivity, settings.LookSensitivity);
+        }
+
+        [Test]
+        public void BgmVolumeIsClampedToUnitRangeIndependentlyOfSfxVolume()
+        {
+            var settings = GameSettingsState.CreateDefault();
+            settings.SetSfxVolume(0.3f);
+            settings.SetBgmVolume(-0.5f);
+            Assert.AreEqual(0f, settings.BgmVolume);
+            settings.SetBgmVolume(1.5f);
+            Assert.AreEqual(1f, settings.BgmVolume);
+            settings.SetBgmVolume(0.4f);
+            Assert.AreEqual(0.4f, settings.BgmVolume);
+            Assert.AreEqual(0.3f, settings.SfxVolume, "BGM音量の変更でSE音量が影響を受けないこと");
         }
     }
 }

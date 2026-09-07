@@ -28,14 +28,20 @@ namespace PocketBlaster.Meta
 
         public bool IsArcadeMode { get; private set; }
         public float SfxVolume { get; private set; }
+        /// <summary>BGM(ループ音楽)の音量。SE音量とは別に持つ(オーナー要望2026-09-08:
+        /// 「同様のアーケードゲームと比べて機能やUIやUXで足りていない部分を...実装する」
+        /// ——BGMそのものが無かったので新設。既定は0.6でSEより少し控えめにしてある、
+        /// ゲームプレイ中の効果音を聞き取りやすくするため)。</summary>
+        public float BgmVolume { get; private set; }
         public float VerticalSensitivity { get; private set; }
         public float HorizontalSensitivity { get; private set; }
         public float LookSensitivity { get; private set; }
 
-        public GameSettingsState(bool isArcadeMode, float sfxVolume, float verticalSensitivity, float horizontalSensitivity, float lookSensitivity)
+        public GameSettingsState(bool isArcadeMode, float sfxVolume, float bgmVolume, float verticalSensitivity, float horizontalSensitivity, float lookSensitivity)
         {
             IsArcadeMode = isArcadeMode;
             SfxVolume = ClampUnit(sfxVolume);
+            BgmVolume = ClampUnit(bgmVolume);
             VerticalSensitivity = ClampSensitivity(verticalSensitivity);
             HorizontalSensitivity = ClampSensitivity(horizontalSensitivity);
             LookSensitivity = ClampLookSensitivity(lookSensitivity);
@@ -44,7 +50,7 @@ namespace PocketBlaster.Meta
         public static GameSettingsState CreateDefault()
         {
             return new GameSettingsState(
-                isArcadeMode: false, sfxVolume: 1f,
+                isArcadeMode: false, sfxVolume: 1f, bgmVolume: 0.6f,
                 verticalSensitivity: 12f, horizontalSensitivity: 12f, lookSensitivity: 300f);
         }
 
@@ -56,6 +62,11 @@ namespace PocketBlaster.Meta
         public void SetSfxVolume(float value)
         {
             SfxVolume = ClampUnit(value);
+        }
+
+        public void SetBgmVolume(float value)
+        {
+            BgmVolume = ClampUnit(value);
         }
 
         public void SetVerticalSensitivity(float value)
