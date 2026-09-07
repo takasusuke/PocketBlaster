@@ -17,6 +17,15 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第3弾: 一時停止中の選択肢を明示（2026-09-08）
+
+第1弾(コンボ・命中率・ヒットマーカー)・第2弾(アイテム出現時間制限)に続く同日3件目。
+`GameSession`・`MultiplayerStageDirector`の一時停止ラベルの文言だけを変更した
+——「一時停止中」だけでは、スマホの「再挑戦」「タイトルへ戻る」ボタンが一時停止中も
+常時有効(実装済み、新しい仕組みは増やしていない)であることが伝わらなかったため。
+フォントサイズを36→28に下げ、複数行に対応(`whiteSpace: Normal`)させた。
+EditMode 82件全て通過、新規SerializeField無しのためシーン再ビルド不要。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第2弾: アイテムの出現時間制限（2026-09-08）
 
 第1弾(コンボ・命中率・ヒットマーカー)に続く同日2件目。`Pickup`に寿命(既定8秒、

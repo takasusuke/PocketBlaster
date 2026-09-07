@@ -555,7 +555,10 @@ namespace PocketBlaster.Gameplay
             RuntimeLabelStyle.ApplyDefaultFont(_gradeLabel);
             root.Add(_gradeLabel);
 
-            _pauseLabel = new Label("一時停止中");
+            // 一時停止中に選べる操作を明示する(オーナー要望2026-09-08、GameSessionと
+            // 同じ理由——「再挑戦」「タイトルへ戻る」は一時停止中も常時有効だが、
+            // それが伝わっていなかった)。
+            _pauseLabel = new Label("一時停止中\n（もう一度押すと再開、「再挑戦」「タイトルへ戻る」も選べます）");
             _pauseLabel.style.display = DisplayStyle.None;
             _pauseLabel.style.position = Position.Absolute;
             _pauseLabel.style.top = Length.Percent(50);
@@ -563,7 +566,10 @@ namespace PocketBlaster.Gameplay
             _pauseLabel.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
             _pauseLabel.style.color = Color.white;
             _pauseLabel.style.backgroundColor = new Color(0f, 0f, 0f, 0.6f);
-            _pauseLabel.style.fontSize = 36;
+            _pauseLabel.style.fontSize = 28;
+            _pauseLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _pauseLabel.style.whiteSpace = WhiteSpace.Normal;
+            _pauseLabel.style.maxWidth = 420;
             _pauseLabel.style.paddingTop = 16;
             _pauseLabel.style.paddingBottom = 16;
             _pauseLabel.style.paddingLeft = 32;

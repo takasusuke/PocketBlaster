@@ -292,7 +292,12 @@ namespace PocketBlaster.Gameplay
             _healthBarFill.style.borderBottomRightRadius = 4;
             _healthBarTrack.Add(_healthBarFill);
 
-            _pauseLabel = new Label("一時停止中");
+            // 一時停止中に選べる操作を明示する(オーナー要望2026-09-08:「同様の
+            // アーケードゲームと比べて機能やUIやUXで足りていない部分を...実装する」)。
+            // 「一時停止中」という表示だけでは、スマホの「再挑戦」「タイトルへ戻る」が
+            // 一時停止中も押せることが伝わらなかった——実は既に両方とも動く
+            // (常時有効なボタンのため)、UI側の案内が無いだけだった。
+            _pauseLabel = new Label("一時停止中\n（もう一度押すと再開、「再挑戦」「タイトルへ戻る」も選べます）");
             _pauseLabel.style.display = DisplayStyle.None;
             _pauseLabel.style.position = Position.Absolute;
             _pauseLabel.style.top = Length.Percent(50);
@@ -300,7 +305,10 @@ namespace PocketBlaster.Gameplay
             _pauseLabel.style.translate = new Translate(Length.Percent(-50), Length.Percent(-50));
             _pauseLabel.style.color = Color.white;
             _pauseLabel.style.backgroundColor = new Color(0f, 0f, 0f, 0.6f);
-            _pauseLabel.style.fontSize = 36;
+            _pauseLabel.style.fontSize = 28;
+            _pauseLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _pauseLabel.style.whiteSpace = WhiteSpace.Normal;
+            _pauseLabel.style.maxWidth = 420;
             _pauseLabel.style.paddingTop = 16;
             _pauseLabel.style.paddingBottom = 16;
             _pauseLabel.style.paddingLeft = 32;
