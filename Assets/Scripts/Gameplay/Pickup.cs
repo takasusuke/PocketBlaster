@@ -18,10 +18,19 @@ namespace PocketBlaster.Gameplay
     /// 倒れ込み)は持たず、1発で即座に消費される。実際の効果適用はStageDirectorが
     /// <see cref="OnConsumed"/>を購読して行う(GyroReticleController/GameSessionへの
     /// 参照はStageDirectorが既に持っているため、ここでは何もしない)。
+    ///
+    /// 出現から一定時間で消える(オーナー要望2026-09-08:「同様のアーケードゲームと
+    /// 比べて機能やUIやUXで足りていない部分を...実装する」——アイテムがずっと残り
+    /// 続けると緊張感が無いという、House of the Dead等の定番演出を追う)。消える前は
+    /// 点滅して予告する。時間切れは<see cref="OnExpired"/>で通知し、効果を伴う
+    /// <see cref="OnConsumed"/>とは区別する——時間切れに効果は無い。
     /// </summary>
     public class Pickup : MonoBehaviour, IShootable
     {
         [SerializeField] private PickupType pickupType;
+        [SerializeField] private float lifetimeSeconds = 8f;
+        [SerializeField] private float blinkWarningSeconds = 3f;
+        [SerializeField] private float blinkIntervalSeconds = 0.15f;
 
         public PickupType Type => pickupType;
         public bool IsHittable => !_isConsumed;
@@ -29,13 +38,43 @@ namespace PocketBlaster.Gameplay
         /// <summary>撃たれて消費された瞬間に1回だけ呼ばれる。引数は自分自身。</summary>
         public event Action<Pickup> OnConsumed;
 
+        /// <summary>撃たれずに時間切れで消えた瞬間に1回だけ呼ばれる。引数は自分自身。
+        /// 効果は伴わない(OnConsumedとは別——出現元の後片付け専用)。</summary>
+        public event Action<Pickup> OnExpired;
+
         private bool _isConsumed;
+        private float _elapsed;
+        private SpriteRenderer _spriteRenderer;
 
         /// <summary>MonoBehaviourにコンストラクタは使えないため、AddComponent直後に
         /// PickupFactoryから呼ぶ初期化メソッド。</summary>
         public void Initialize(PickupType type)
         {
             pickupType = type;
+        }
+
+        private void Awake()
+        {
+            _spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        }
+
+        private void Update()
+        {
+            if (_isConsumed) return;
+            _elapsed += Time.deltaTime;
+
+            var remaining = lifetimeSeconds - _elapsed;
+            if (remaining <= blinkWarningSeconds && _spriteRenderer != null)
+            {
+                _spriteRenderer.enabled = Mathf.PingPong(Time.time / blinkIntervalSeconds, 1f) > 0.5f;
+            }
+
+            if (_elapsed >= lifetimeSeconds)
+            {
+                _isConsumed = true;
+                OnExpired?.Invoke(this);
+                gameObject.SetActive(false);
+            }
         }
 
         public void TakeHit()

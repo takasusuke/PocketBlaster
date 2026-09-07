@@ -234,6 +234,7 @@ namespace PocketBlaster.Gameplay
 
             _currentPickup = PickupFactory.Create(ChooseRandomPickupType(), position);
             _currentPickup.OnConsumed += HandlePickupConsumed;
+            _currentPickup.OnExpired += HandlePickupExpired;
         }
 
         private static PickupType ChooseRandomPickupType()
@@ -244,11 +245,17 @@ namespace PocketBlaster.Gameplay
 
         /// <summary>
         /// 効果の実際の適用は撃った本人(MultiplayerAimController)側で行う——ここでは
-        /// 出現管理の後片付け(購読解除・参照クリア)だけ。
+        /// 出現管理の後片付け(購読解除・参照クリア)だけ。時間切れ(OnExpired、
+        /// オーナー要望2026-09-08)も効果が無い点は同じなので同じ後片付けで済む。
         /// </summary>
-        private void HandlePickupConsumed(Pickup pickup)
+        private void HandlePickupConsumed(Pickup pickup) => UnsubscribeAndClearPickup(pickup);
+
+        private void HandlePickupExpired(Pickup pickup) => UnsubscribeAndClearPickup(pickup);
+
+        private void UnsubscribeAndClearPickup(Pickup pickup)
         {
             pickup.OnConsumed -= HandlePickupConsumed;
+            pickup.OnExpired -= HandlePickupExpired;
             if (_currentPickup == pickup) _currentPickup = null;
         }
 
@@ -257,6 +264,7 @@ namespace PocketBlaster.Gameplay
         {
             if (_currentPickup == null) return;
             _currentPickup.OnConsumed -= HandlePickupConsumed;
+            _currentPickup.OnExpired -= HandlePickupExpired;
             Destroy(_currentPickup.gameObject);
             _currentPickup = null;
         }

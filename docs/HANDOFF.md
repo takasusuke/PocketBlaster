@@ -17,6 +17,24 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第2弾: アイテムの出現時間制限（2026-09-08）
+
+第1弾(コンボ・命中率・ヒットマーカー)に続く同日2件目。`Pickup`に寿命(既定8秒、
+消える3秒前から点滅で予告)を追加した——ずっと残り続けると緊張感が無いという指摘
+(`docs/requirements.md`「機能・UI/UXの比較」参照)。
+
+- 時間切れは新設の`OnExpired`イベントで通知し、効果を伴う`OnConsumed`と区別した
+  (時間切れには一切効果を与えない)。`StageDirector`・`MultiplayerStageDirector`
+  両方で購読・後片付けを追加(`MultiplayerStageDirector`は`HandlePickupConsumed`/
+  `HandlePickupExpired`が同じ後片付けだったため`UnsubscribeAndClearPickup`に
+  まとめた)。
+- `Pickup`はランタイムで`AddComponent`されるため(`PickupFactory`)、新しい
+  `[SerializeField]`(寿命・点滅設定)もシーン再ビルド不要で即座に効く。
+- **確認方法**: EditMode 82件全て通過。**実機での見た目(点滅のタイミング・
+  寿命8秒が長すぎ/短すぎないか)は未確認**。
+- 残りの候補(BGM・敵の遠距離攻撃・武器種類・一時停止メニュー・画面シェイク見送りの
+  理由)は引き続き`docs/requirements.md`「機能・UI/UXの比較」に集約している。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第1弾: コンボ・命中率・ヒットマーカー（2026-09-08）
 
 オーナー要望「同様のアーケードゲームと比べて、機能やUIやUXで足りていない部分を

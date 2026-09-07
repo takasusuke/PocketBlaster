@@ -143,6 +143,7 @@ namespace PocketBlaster.Gameplay
 
             _currentPickup = PickupFactory.Create(ChooseRandomPickupType(), position);
             _currentPickup.OnConsumed += HandlePickupConsumed;
+            _currentPickup.OnExpired += HandlePickupExpired;
         }
 
         private static PickupType ChooseRandomPickupType()
@@ -158,6 +159,7 @@ namespace PocketBlaster.Gameplay
         private void HandlePickupConsumed(Pickup pickup)
         {
             pickup.OnConsumed -= HandlePickupConsumed;
+            pickup.OnExpired -= HandlePickupExpired;
             if (_currentPickup == pickup) _currentPickup = null;
 
             switch (pickup.Type)
@@ -174,11 +176,21 @@ namespace PocketBlaster.Gameplay
             }
         }
 
+        /// <summary>撃たれずに時間切れで消えた場合。効果は無く後片付けだけ
+        /// (オーナー要望2026-09-08、Pickup.OnExpired参照)。</summary>
+        private void HandlePickupExpired(Pickup pickup)
+        {
+            pickup.OnConsumed -= HandlePickupConsumed;
+            pickup.OnExpired -= HandlePickupExpired;
+            if (_currentPickup == pickup) _currentPickup = null;
+        }
+
         /// <summary>ウェーブが切り替わる時、取り残されたアイテムは片付ける。</summary>
         private void ClearCurrentPickup()
         {
             if (_currentPickup == null) return;
             _currentPickup.OnConsumed -= HandlePickupConsumed;
+            _currentPickup.OnExpired -= HandlePickupExpired;
             Destroy(_currentPickup.gameObject);
             _currentPickup = null;
         }
