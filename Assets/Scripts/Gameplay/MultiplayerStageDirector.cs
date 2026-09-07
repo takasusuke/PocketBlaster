@@ -69,6 +69,8 @@ namespace PocketBlaster.Gameplay
 
         private StageProgressState _progress;
         private ScoreState _score;
+        private ComboState _combo;
+        private ShotAccuracyState _accuracy;
         private PlayerHealthState _health;
         private string _highScorePrefsKey;
         private int _maxPossibleScore;
@@ -95,6 +97,8 @@ namespace PocketBlaster.Gameplay
             _server = PhoneControllerServer.GetOrCreate();
             _slotAssigner = new PlayerSlotAssigner(playerCapacity);
             _score = new ScoreState();
+            _combo = new ComboState();
+            _accuracy = new ShotAccuracyState();
             _health = new PlayerHealthState(maxHealth);
             _highScorePrefsKey = $"PocketBlaster.HighScore.{gameObject.scene.name}";
 
@@ -151,6 +155,9 @@ namespace PocketBlaster.Gameplay
             var controller = go.AddComponent<MultiplayerAimController>();
             controller.Initialize(connectionId, slot.Value, PlayerColors[slot.Value], _server);
             controller.OnHealthPickupCollected += HandleHealthPickupCollected;
+            // コンボ・命中率は個人ではなく共有(協力プレイのため、オーナー要望2026-09-08)。
+            // どちらが撃っても同じComboState/ShotAccuracyStateへ積む。
+            controller.OnShotResolved += HandleShotResolved;
             _aimControllers[connectionId] = controller;
 
             _server.SendToPlayer(connectionId, $"{{\"type\":\"welcome\",\"color\":\"{PlayerColorNames[slot.Value]}\"}}");
@@ -164,6 +171,7 @@ namespace PocketBlaster.Gameplay
                 if (controller != null)
                 {
                     controller.OnHealthPickupCollected -= HandleHealthPickupCollected;
+                    controller.OnShotResolved -= HandleShotResolved;
                     Destroy(controller.gameObject);
                 }
                 _aimControllers.Remove(connectionId);
@@ -272,9 +280,19 @@ namespace PocketBlaster.Gameplay
             moveTarget.rotation = targetRotation;
         }
 
+        /// <summary>コンボ・命中率の更新(オーナー要望2026-09-08、StageDirectorと同じ役割
+        /// をどちらのプレイヤーの射撃にも適用する——協力プレイのため個人ではなく共有)。</summary>
+        private void HandleShotResolved(bool didHit)
+        {
+            _combo.RegisterShot(didHit);
+            _accuracy.RegisterShot(didHit);
+            UpdateWaveLabel();
+        }
+
         private void HandleEnemyDefeated(Target defeatedTarget)
         {
-            var points = defeatedTarget.WasLastHitHeadshot ? defeatedTarget.PointValue * 2 : defeatedTarget.PointValue;
+            var basePoints = defeatedTarget.WasLastHitHeadshot ? defeatedTarget.PointValue * 2 : defeatedTarget.PointValue;
+            var points = Mathf.RoundToInt(basePoints * _combo.Multiplier);
             _score.AddPoints(points);
             ScorePopupEffect.SpawnAt(defeatedTarget.transform.position, points, stageCamera);
             AdvanceWaveState();
@@ -364,7 +382,9 @@ namespace PocketBlaster.Gameplay
             var highScoreLine = isNewHighScore
                 ? $"ハイスコア更新！ {_score.TotalScore}"
                 : $"スコア: {_score.TotalScore}（ハイスコア: {previousHighScore}）";
-            _waveLabel.text = $"ステージクリア！\n{highScoreLine}";
+            var statsLine = $"命中率: {_accuracy.AccuracyPercent:F0}%（{_accuracy.Hits}/{_accuracy.ShotsFired}）" +
+                             $"  最大コンボ: {_combo.MaxCombo}";
+            _waveLabel.text = $"ステージクリア！\n{highScoreLine}\n{statsLine}";
 
             ShowGrade(ScoreGrade.Compute(_score.TotalScore, _maxPossibleScore));
             StartCoroutine(ReturnToTitleAfterDelay(returnToTitleDelaySeconds));
@@ -448,7 +468,9 @@ namespace PocketBlaster.Gameplay
         {
             _waveLabel.text = $"ウェーブ {_progress.CurrentWaveIndex + 1}/{_progress.WaveCount}" +
                                $"  残り敵: {_progress.RemainingInCurrentWave}";
-            _scoreLabel.text = $"スコア {_score.TotalScore}";
+            _scoreLabel.text = _combo.CurrentCombo >= 2
+                ? $"スコア {_score.TotalScore}  {_combo.CurrentCombo}COMBO x{_combo.Multiplier:0.0}"
+                : $"スコア {_score.TotalScore}";
         }
 
         private void BuildUi()

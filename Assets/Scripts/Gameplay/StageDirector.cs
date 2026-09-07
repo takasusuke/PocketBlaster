@@ -65,6 +65,8 @@ namespace PocketBlaster.Gameplay
 
         private StageProgressState _progress;
         private ScoreState _score;
+        private ComboState _combo;
+        private ShotAccuracyState _accuracy;
         private string _highScorePrefsKey;
         private int _maxPossibleScore;
         private UIDocument _uiDocument;
@@ -81,7 +83,10 @@ namespace PocketBlaster.Gameplay
             if (reticleController == null) reticleController = FindFirstObjectByType<GyroReticleController>();
 
             _score = new ScoreState();
+            _combo = new ComboState();
+            _accuracy = new ShotAccuracyState();
             _highScorePrefsKey = $"PocketBlaster.HighScore.{gameObject.scene.name}";
+            if (reticleController != null) reticleController.OnShotResolved += HandleShotResolved;
 
             var enemyCounts = new int[waves.Length];
             for (var i = 0; i < waves.Length; i++)
@@ -178,12 +183,31 @@ namespace PocketBlaster.Gameplay
             _currentPickup = null;
         }
 
+        /// <summary>
+        /// 命中(空撃ちを除く)のたびに呼ばれる。コンボ・命中率の更新だけを行い、
+        /// 加点はしない(加点はHandleEnemyDefeated——実際に倒れた瞬間)。
+        /// GyroReticleController.OnShotResolvedは以前ゲームオーバー判定
+        /// (「はずれ＝残機減少」)に使っていたが却下されて以来購読者が居なかった
+        /// (2026-09-08、オーナー要望「同様のアーケードゲームと比べて足りていない
+        /// 部分を...随時実装する」を受けてコンボ/命中率の集計に転用)。
+        /// </summary>
+        private void HandleShotResolved(bool didHit)
+        {
+            _combo.RegisterShot(didHit);
+            _accuracy.RegisterShot(didHit);
+            UpdateWaveLabel();
+        }
+
         private void HandleEnemyDefeated(Target defeatedTarget)
         {
             // ヘッドショットは反動コントロールの見返りとして得点を2倍にする
             // (オーナー要望2026-09-06:「反動コントロール要素として、敵のヘッドショットなど
             // 部位別のダメージ量変化を実装してもらって試したい」。HeadHitbox参照)。
-            var points = defeatedTarget.WasLastHitHeadshot ? defeatedTarget.PointValue * 2 : defeatedTarget.PointValue;
+            var basePoints = defeatedTarget.WasLastHitHeadshot ? defeatedTarget.PointValue * 2 : defeatedTarget.PointValue;
+            // コンボ倍率(オーナー要望2026-09-08、ComboState参照)。連続命中を途切れさせずに
+            // 倒すほど得点効率が上がる——「はずれ」自体へのペナルティ(却下済み)とは別の、
+            // 得点だけのボーナス系コンボ。
+            var points = Mathf.RoundToInt(basePoints * _combo.Multiplier);
             _score.AddPoints(points);
             // 倒した場所にその場で加点を表示する(オーナー要望2026-09-06:
             // 「敵を倒した時にスコアを表示するようにしてください」)。
@@ -221,7 +245,11 @@ namespace PocketBlaster.Gameplay
         {
             _waveLabel.text = $"ウェーブ {_progress.CurrentWaveIndex + 1}/{_progress.WaveCount}" +
                                $"  残り敵: {_progress.RemainingInCurrentWave}";
-            _scoreLabel.text = $"スコア {_score.TotalScore}";
+            // コンボ表示(オーナー要望2026-09-08)。2連続以上の時だけ出す——1発ごとに
+            // 「1COMBO」が出続けるのは情報として無意味なため。
+            _scoreLabel.text = _combo.CurrentCombo >= 2
+                ? $"スコア {_score.TotalScore}  {_combo.CurrentCombo}COMBO x{_combo.Multiplier:0.0}"
+                : $"スコア {_score.TotalScore}";
         }
 
         private void ShowStageClear()
@@ -237,7 +265,12 @@ namespace PocketBlaster.Gameplay
             var highScoreLine = isNewHighScore
                 ? $"ハイスコア更新！ {_score.TotalScore}"
                 : $"スコア: {_score.TotalScore}（ハイスコア: {previousHighScore}）";
-            _waveLabel.text = $"ステージクリア！\n{highScoreLine}";
+            // 命中率・最大コンボ(オーナー要望2026-09-08:「同様のアーケードゲームと
+            // 比べて機能やUIやUXで足りていない部分を...実装する」)。House of the Dead等の
+            // リザルト画面にある定番の追加項目。
+            var statsLine = $"命中率: {_accuracy.AccuracyPercent:F0}%（{_accuracy.Hits}/{_accuracy.ShotsFired}）" +
+                             $"  最大コンボ: {_combo.MaxCombo}";
+            _waveLabel.text = $"ステージクリア！\n{highScoreLine}\n{statsLine}";
 
             ShowGrade(ScoreGrade.Compute(_score.TotalScore, _maxPossibleScore));
 
@@ -362,6 +395,7 @@ namespace PocketBlaster.Gameplay
 
         private void OnDestroy()
         {
+            if (reticleController != null) reticleController.OnShotResolved -= HandleShotResolved;
             if (_panelSettings != null) Destroy(_panelSettings);
         }
     }

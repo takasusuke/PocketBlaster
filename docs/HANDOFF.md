@@ -17,6 +17,38 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第1弾: コンボ・命中率・ヒットマーカー（2026-09-08）
+
+オーナー要望「同様のアーケードゲームと比べて、機能やUIやUXで足りていない部分を
+反復して考えて、随時実装する作業を進めてください」を受けた継続タスクの初回。
+比較・残りの候補は`docs/requirements.md`「## 競合調査」内の新設セクション
+「機能・UI/UXの比較」に集約した——**次に着手する時はまずそこを読む**。
+
+- **コンボ倍率**(`ComboState`、新規、純粋C#+EditModeテスト10件): 連続命中で得点
+  倍率が上がり、はずすとリセット。`StageDirector`/`MultiplayerStageDirector`の
+  `HandleEnemyDefeated`で得点計算に掛けている。
+- **命中率**(`ShotAccuracyState`、新規、純粋C#+EditModeテスト4件): ステージクリア
+  画面に表示。
+- どちらも`GyroReticleController.OnShotResolved`(以前は「はずれ＝残機減少」判定用
+  だったが却下されて以来購読者ゼロだったイベント)を再利用して集計している——
+  新しい配線をほぼ追加せずに済んだ。
+- マルチプレイヤー側は`MultiplayerAimController`に同名の`OnShotResolved`イベントを
+  新設し、`MultiplayerStageDirector`が両プレイヤーぶん購読して1つの共有
+  ComboState/ShotAccuracyStateに集計する(協力プレイのため個人ではなく共有)。
+- **ヒットマーカー**: 命中の瞬間だけレティクルを金色に光らせ一回り大きくする。
+  `GyroReticleController`・`MultiplayerAimController`双方に同じロジックを追加した
+  (共有クラスへの抽出はせず——UI Elementの参照(`_reticle`)がそれぞれのクラスの
+  フィールドで、抽出すると却って複雑になるため、この程度の重複は許容した)。
+- **画面シェイクは見送った**: カメラのTransformを`PlayerLocomotion`(移動)と
+  `MultiplayerStageDirector.MoveCameraTo`(ウェーブ間の自動移動)の両方が直接
+  上書きしているため、シェイクのオフセットを安全に重ねるには「最後に上乗せする」
+  設計変更が要る。今回のスコープでは見送り、ヒットマーカーで代替した。
+- **今回はシーン再ビルド不要**: 追加したフィールドはすべて非シリアライズ
+  (`[SerializeField]`を1つも追加していない)ため、既存シーンのYAMLは変更なしで
+  そのまま新しいロジックが効く。
+- **確認方法**: EditMode 82件(既存68+新規14)全て通過。**実機での見え方(コンボ表示・
+  ヒットマーカーの視認性)は未確認**。
+
 ## 床のグリッドを専用アートへ差し替え（2026-09-07）
 
 オーナー要望「床はグリッドではなく、起動画面の背景の地面と同じモチーフで絵柄を

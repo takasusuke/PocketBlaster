@@ -134,6 +134,13 @@ namespace PocketBlaster.Aim
         private static readonly Color AmmoPipEmptyColor = new Color(1f, 1f, 1f, 0.18f);
         private static readonly Color AimReticleColor = new Color(1f, 0.2f, 0.2f, 0.9f);
         private static readonly Color LookCursorColor = new Color(0.3f, 0.9f, 1f, 0.85f);
+        // ヒットマーカー(オーナー要望2026-09-08「同様のアーケードゲームと比べて
+        // 足りていない部分」の反復検討で追加)。命中の瞬間だけレティクルを金色に光らせ
+        // 一回り大きくする——「当たった」という結果がリコイル(位置のズレ)だけでは
+        // 伝わりにくかったための視覚的フィードバック。
+        private static readonly Color HitFlashColor = new Color(1f, 0.85f, 0.3f, 1f);
+        private const float HitFlashDurationSeconds = 0.12f;
+        private float _hitFlashTimer;
 
         private void Awake()
         {
@@ -225,7 +232,19 @@ namespace PocketBlaster.Aim
             // カメラ自体を回転させる設計のため、画面中央=カメラの正面=現在向いている
             // 方向と一致する。狙い(赤)と見た目で区別できるよう色を変える。
             var isAimActive = IsMouseDebugActive || _server.IsAiming;
-            SetReticleColor(isAimActive ? AimReticleColor : LookCursorColor);
+            if (_hitFlashTimer > 0f)
+            {
+                _hitFlashTimer -= Time.deltaTime;
+                SetReticleColor(HitFlashColor);
+                var flashProgress = Mathf.Clamp01(_hitFlashTimer / HitFlashDurationSeconds);
+                var scale = Mathf.Lerp(1f, 1.4f, flashProgress);
+                _reticle.style.scale = new Scale(new Vector3(scale, scale, 1f));
+            }
+            else
+            {
+                SetReticleColor(isAimActive ? AimReticleColor : LookCursorColor);
+                _reticle.style.scale = new Scale(Vector3.one);
+            }
 
             // リコイルは常に基準へ向けて減衰させる(構えていない間も蓄積が残ったままに
             // ならないように)。
@@ -344,6 +363,7 @@ namespace PocketBlaster.Aim
             _audioSource.PlayOneShot(_shotClip);
             var didHit = TryHitTargetAtReticle();
             _lastShotResult = didHit ? "命中" : "はずれ";
+            if (didHit) _hitFlashTimer = HitFlashDurationSeconds;
             OnShotResolved?.Invoke(didHit);
 
             // リコイル(次弾の狙点を上へ跳ね上げる。今撃った弾の命中判定には影響しない)。

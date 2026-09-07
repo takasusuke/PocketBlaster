@@ -43,8 +43,19 @@ namespace PocketBlaster.Gameplay
         /// `MultiplayerStageDirector`が購読し、共有HPプールを回復する。</summary>
         public event System.Action OnHealthPickupCollected;
 
+        /// <summary>狙って撃った結果(true=命中、false=はずれ)。空撃ちでは発火しない
+        /// (GyroReticleController.OnShotResolvedと同じ規約)。`MultiplayerStageDirector`が
+        /// 購読し、共有のコンボ・命中率へ反映する(2026-09-08、オーナー要望「同様の
+        /// アーケードゲームと比べて足りていない部分を...随時実装する」の一環)。</summary>
+        public event System.Action<bool> OnShotResolved;
+
         private static readonly Color AmmoPipFilledColor = new Color(1f, 0.75f, 0.15f);
         private static readonly Color AmmoPipEmptyColor = new Color(1f, 1f, 1f, 0.18f);
+        // ヒットマーカー(GyroReticleControllerと同じ考え方)。自分の色ではなく共通の
+        // 金色にする——「命中した」という結果はプレイヤー間で統一表示の方が分かりやすい。
+        private static readonly Color HitFlashColor = new Color(1f, 0.85f, 0.3f, 1f);
+        private const float HitFlashDurationSeconds = 0.12f;
+        private float _hitFlashTimer;
 
         private int _connectionId;
         private int _slot;
@@ -136,6 +147,20 @@ namespace PocketBlaster.Gameplay
             _reticle.style.left = x - _reticle.resolvedStyle.width / 2f;
             _reticle.style.top = y - _reticle.resolvedStyle.height / 2f;
 
+            if (_hitFlashTimer > 0f)
+            {
+                _hitFlashTimer -= Time.deltaTime;
+                SetReticleColor(HitFlashColor);
+                var flashProgress = Mathf.Clamp01(_hitFlashTimer / HitFlashDurationSeconds);
+                var scale = Mathf.Lerp(1f, 1.4f, flashProgress);
+                _reticle.style.scale = new Scale(new Vector3(scale, scale, 1f));
+            }
+            else
+            {
+                SetReticleColor(_playerColor);
+                _reticle.style.scale = new Scale(Vector3.one);
+            }
+
             if (_isReloading)
             {
                 const float barWidth = 56f;
@@ -212,12 +237,16 @@ namespace PocketBlaster.Gameplay
             if (aimRay == null)
             {
                 _audioSource.PlayOneShot(_missClip);
+                OnShotResolved?.Invoke(false);
             }
             else
             {
                 var result = AimHitResolver.TryHit(aimRay.Value, maxHitDistance, hitLayerMask, out var hitShootable);
-                _audioSource.PlayOneShot(result == AimHitResolver.Result.Miss ? _missClip : _hitClip);
+                var didHit = result != AimHitResolver.Result.Miss;
+                _audioSource.PlayOneShot(didHit ? _hitClip : _missClip);
+                if (didHit) _hitFlashTimer = HitFlashDurationSeconds;
                 if (hitShootable is Pickup pickup) ApplyPickupEffect(pickup.Type);
+                OnShotResolved?.Invoke(didHit);
             }
 
             if (_ammo.CurrentAmmo == 0 && !_isReloading)
