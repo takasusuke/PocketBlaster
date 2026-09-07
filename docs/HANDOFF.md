@@ -17,6 +17,29 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 床のグリッドを専用アートへ差し替え（2026-09-07）
+
+オーナー要望「床はグリッドではなく、起動画面の背景の地面と同じモチーフで絵柄を
+配置して」を受けて、`GroundFactory`が手続き生成の格子模様の代わりに専用アート
+(`Assets/Art/Environment/ground_texture.png`)をタイル張りするようにした。
+
+- **画像生成は2回やり直した**: 1回目は芝生が画像の縁だけに集中し、タイル張りすると
+  「額縁」状の継ぎ目がくっきり出る失敗作だった。プロンプトに「要素を画像全体へ
+  均等に分布させる・縁で切れても隣のタイルへ続くように」を追加して2回目で改善
+  したが、縁にわずかな明暗差は残っている(**完全な無縫製ではない**、
+  `docs/requirements.md`§8参照)。
+- 新しく生成したPNGはwrapModeがRepeatになっているとは限らないため、
+  `GroundFactory.EnsureTiledImportSettings`(新規、`EnemyFactory.
+  EnsureSpriteImportSettings`と同じパターン)で矯正した。
+- 1タイル=4m四方(格子模様時代の1マス=1mより大きく取っている)。画像が見つからない
+  場合は従来の格子模様へ自動フォールバックする(`GetFallbackGridTexture`)。
+- Milestone4_Stage・Stage2_BossRush・PracticeRange・MultiplayerCoopの4シーン全てで
+  `GroundFactory.CreateGrid`を呼んでいるため、全て再ビルドして反映した。
+- **確認方法**: EditMode 68件全て通過。4シーンとも`_MainTex`が新しいテクスチャの
+  GUIDを指し、`m_Scale`がステージのサイズ÷4(400m四方の床なら100)になっていることを
+  シーンYAML上で確認した。**実際にUnity上での見え方(タイルの継ぎ目の目立ち方)は
+  未確認**——気になる場合は縁のトリミングやシームレス処理の追加生成を検討する。
+
 ## マルチプレイヤーにアイテム(Pickup)を追加（2026-09-07）
 
 マルチプレイヤーモード実装時にv1スコープ外としていたアイテムを、オーナー要望
