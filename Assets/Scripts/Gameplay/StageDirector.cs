@@ -86,6 +86,14 @@ namespace PocketBlaster.Gameplay
         private Label _bossHealthBarLabel;
         private Target _currentBoss;
         private Pickup _currentPickup;
+        // パーフェクトウェーブボーナス(オーナー要望2026-09-08「同様のアーケード
+        // ゲームと比べて足りていない部分を...実装する」——House of the Dead等の
+        // 「被弾ゼロでクリア」ボーナスが定番なのに未実装だった)。ウェーブ中に
+        // 1発でもはずすか、敵に近づかれ過ぎるとそのウェーブでは不成立になる。
+        private const int PerfectWaveBonusPerEnemy = 50;
+        private bool _waveHadMiss;
+        private bool _waveHadEnemyReachPlayer;
+        private Label _perfectLabel;
 
         private void Awake()
         {
@@ -122,6 +130,9 @@ namespace PocketBlaster.Gameplay
                 ShowStageClear();
                 return;
             }
+
+            _waveHadMiss = false;
+            _waveHadEnemyReachPlayer = false;
 
             var wave = waves[_progress.CurrentWaveIndex];
             foreach (var enemy in wave.enemies)
@@ -236,6 +247,7 @@ namespace PocketBlaster.Gameplay
         {
             _combo.RegisterShot(didHit);
             _accuracy.RegisterShot(didHit);
+            if (!didHit) _waveHadMiss = true;
             UpdateWaveLabel();
         }
 
@@ -261,6 +273,7 @@ namespace PocketBlaster.Gameplay
         private void HandleEnemyReachedPlayer(Target reachedTarget)
         {
             if (reachedTarget == _currentBoss) ClearCurrentBoss();
+            _waveHadEnemyReachPlayer = true;
             OnEnemyReachedPlayer?.Invoke();
             AdvanceWaveState();
         }
@@ -298,9 +311,44 @@ namespace PocketBlaster.Gameplay
                         approach.OnRangedAttackHit -= HandleEnemyRangedAttackHit;
                     }
                 }
+                if (!_waveHadMiss && !_waveHadEnemyReachPlayer) AwardPerfectWaveBonus(wave);
                 ClearCurrentPickup();
                 StartNextWave();
             }
+        }
+
+        /// <summary>ウェーブ中に1発もはずさず、敵にも近づかれずクリアした場合のボーナス
+        /// (オーナー要望2026-09-08、House of the Dead等の定番)。</summary>
+        private void AwardPerfectWaveBonus(Wave wave)
+        {
+            var bonus = wave.enemies.Length * PerfectWaveBonusPerEnemy;
+            _score.AddPoints(bonus);
+            var popupPosition = stageCamera.transform.position + stageCamera.transform.forward * 5f;
+            ScorePopupEffect.SpawnAt(popupPosition, bonus, stageCamera);
+            ShowPerfectWaveLabel(bonus);
+        }
+
+        private void ShowPerfectWaveLabel(int bonus)
+        {
+            _perfectLabel.text = $"パーフェクト！ +{bonus}";
+            _perfectLabel.style.display = DisplayStyle.Flex;
+            _perfectLabel.style.opacity = 1f;
+            StartCoroutine(PerfectWaveLabelRoutine());
+        }
+
+        private IEnumerator PerfectWaveLabelRoutine()
+        {
+            const float visibleDuration = 1.2f;
+            const float fadeDuration = 0.3f;
+            yield return new WaitForSeconds(visibleDuration);
+            var t = 0f;
+            while (t < fadeDuration)
+            {
+                t += Time.deltaTime;
+                _perfectLabel.style.opacity = Mathf.Lerp(1f, 0f, t / fadeDuration);
+                yield return null;
+            }
+            _perfectLabel.style.display = DisplayStyle.None;
         }
 
         private void UpdateWaveLabel()
@@ -502,6 +550,21 @@ namespace PocketBlaster.Gameplay
             _bossHealthBarLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
             RuntimeLabelStyle.ApplyDefaultFont(_bossHealthBarLabel);
             _bossHealthBarTrack.Add(_bossHealthBarLabel);
+
+            // パーフェクトウェーブボーナス(オーナー要望2026-09-08)。通常時は非表示、
+            // 成立した瞬間だけ画面中央上寄りに表示してフェードアウトする。
+            _perfectLabel = new Label();
+            _perfectLabel.style.display = DisplayStyle.None;
+            _perfectLabel.style.position = Position.Absolute;
+            _perfectLabel.style.top = Length.Percent(18);
+            _perfectLabel.style.left = 0;
+            _perfectLabel.style.right = 0;
+            _perfectLabel.style.color = new Color(1f, 0.85f, 0.2f);
+            _perfectLabel.style.fontSize = 42;
+            _perfectLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _perfectLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            RuntimeLabelStyle.ApplyDefaultFont(_perfectLabel);
+            _uiDocument.rootVisualElement.Add(_perfectLabel);
 
             // 総合評価(A〜E)。ステージクリアまでは非表示、画面中央に大きく出す。
             _gradeLabel = new Label();

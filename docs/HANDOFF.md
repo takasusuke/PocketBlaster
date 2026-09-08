@@ -17,6 +17,27 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第10弾: パーフェクトウェーブボーナス（2026-09-08）
+
+House of the Dead等の「被弾ゼロでクリア」ボーナスが定番なのに未実装だった不足に
+対応した。
+
+- `StageDirector`/`MultiplayerStageDirector`に`_waveHadMiss`/
+  `_waveHadEnemyReachPlayer`の2フラグを追加。`StartNextWave`で毎回falseへ
+  リセットし、`HandleShotResolved(false)`(はずし)・`HandleEnemyReachedPlayer`
+  (敵が近づき過ぎた)のいずれかが起きるとtrueになる。
+- `AdvanceWaveState`のウェーブクリア判定内で、両方falseのまま(=1発もはずさず、
+  敵にも近づかれずに全滅させた)なら`AwardPerfectWaveBonus`を呼び、
+  そのウェーブの敵数×50点を加点、`ScorePopupEffect`で数値を、専用の
+  `_perfectLabel`(新規、金色・フェードアウト付き)で「パーフェクト！ +N」を
+  画面上部に一時表示する。
+- 判定に「ショット数」は見ていない——`waveCleared`が成立する時点で、その
+  ウェーブの敵は「撃たれて倒された」か「近づかれた」のどちらかしか無いため、
+  `_waveHadEnemyReachPlayer`がfalseなら全滅が撃破由来だと判定できる。
+- 新規`[SerializeField]`は追加していないため**シーンの再ビルドは不要**。
+  EditMode 83件全て通過を確認。
+- **未検証**: 実機でのボーナス額(敵数×50)のバランス。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第9弾: 画面シェイク（2026-09-08、オーナー承認）
 
 第8弾で見送った画面シェイクを、オーナー承認を得てシーン階層の変更付きで実装した。
