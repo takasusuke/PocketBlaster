@@ -64,6 +64,7 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private int playerCapacity = 2;
 
         private PhoneControllerServer _server;
+        private CameraShake _cameraShake;
         private PlayerSlotAssigner _slotAssigner;
         private readonly Dictionary<int, MultiplayerAimController> _aimControllers = new Dictionary<int, MultiplayerAimController>();
         private Pickup _currentPickup;
@@ -100,6 +101,10 @@ namespace PocketBlaster.Gameplay
             if (moveTarget == null) moveTarget = stageCamera.transform;
 
             _server = PhoneControllerServer.GetOrCreate();
+            // CameraShakeはカメラの実体(Lens、CameraRigFactory参照)に付いており、
+            // このGameObjectとは別なのでFindFirstObjectByTypeで探す
+            // (オーナー承認2026-09-08、画面シェイク導入)。
+            _cameraShake = FindFirstObjectByType<CameraShake>();
             _slotAssigner = new PlayerSlotAssigner(playerCapacity);
             _score = new ScoreState();
             _combo = new ComboState();
@@ -402,6 +407,7 @@ namespace PocketBlaster.Gameplay
 
             var isGameOverNow = _health.TakeDamage(amount);
             TriggerDamageFlash();
+            if (_cameraShake != null) _cameraShake.Shake(0.25f, 0.15f);
             UpdateHealthBar();
             if (isGameOverNow)
             {

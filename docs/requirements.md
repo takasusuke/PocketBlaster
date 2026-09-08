@@ -122,10 +122,22 @@ Point Blank等の**体験全体**(得点・演出・進行・音)と比べた時
   フィードバックで、ヒットマーカー(命中時だけ)とは役割が別。CameraのTransformには
   一切触れない画面全体のUIオーバーレイなので、下記の画面シェイクが抱える制約を
   受けずに実装できた。
-- **画面シェイク**: 検討したが、カメラのTransformを複数の仕組み(`PlayerLocomotion`の
-  移動・`MultiplayerStageDirector.MoveCameraTo`)が直接書き換えているため、シェイクを
-  安全に重ねるには「シェイク用オフセットを最後に上乗せする」設計変更が要る。
-  今回も見送り、ヒットマーカー・マズルフラッシュ(レティクル側の演出)で代替した。
+- **画面シェイク**: 一度は見送ったが、オーナー承認(2026-09-08)を得てシーン階層の
+  変更を実施した。従来はカメラを動かす側(`PlayerLocomotion.movableRoot`/
+  `MultiplayerStageDirector.moveTarget`)がCameraコンポーネントを持つGameObject
+  自身のTransformを直接書き換えていたため、シェイク用オフセットを安全に重ねられ
+  なかった。`CameraRigFactory`(新規、Editor)がカメラ生成を「動かす側(リグ)」と
+  「実体(Lens、Cameraコンポーネント本体)」に分離し、`CameraShake`(新規)はLens
+  自身の`localPosition`にだけ減衰オフセットを`LateUpdate`で上乗せする——リグ側の
+  既存の書き込み(PlayerLocomotionの足踏み移動、MoveCameraToの自動移動)は一切
+  変更していない(別のTransform・別のタイミングで動くため競合しない)。
+  被弾時(`GameSession`/`MultiplayerStageDirector`の`TakeDamage`)にシェイクを
+  発火する(0.25秒・振幅0.15m)。対象5シーン(Milestone3/4・Stage2・PracticeRange・
+  MultiplayerCoop)全てのカメラ生成コードを`CameraRigFactory`経由に置き換え、
+  再ビルドしてCamera/AudioListenerがそれぞれ1個のまま(重複なし)・MainCameraタグが
+  正しく子(Lens)に付いていることを確認した。**未検証**: 実機でのシェイクの強さ・
+  ジャイロ照準との相性(理論上はレティクルのスクリーン座標計算はカメラのTransformに
+  依存しないため干渉しないはずだが、実際の体感は未確認)。
 - **タイムアタック・複数プレイヤー間のランキング**: 既存の未決事項#5と同じ。
 - **ボスHPバー**: `Stage2_BossRush`という名前のステージがありながら、ボス(パンプキン、
   hitPoints=3)にも通常の野菜ゾンビと同じ被弾時の色変化しか無く、専用のHP表示が

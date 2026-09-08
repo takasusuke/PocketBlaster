@@ -37,13 +37,10 @@ namespace PocketBlaster.EditorTools
             AssetDatabase.Refresh();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            var cameraGo = new GameObject("Main Camera");
-            cameraGo.tag = "MainCamera";
-            var camera = cameraGo.AddComponent<Camera>();
+            var (cameraGo, camera, _) = CameraRigFactory.Create("Main Camera");
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.35f, 0.55f, 0.75f);
             cameraGo.transform.position = new Vector3(0f, 1.6f, 0f);
-            cameraGo.AddComponent<AudioListener>();
 
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();

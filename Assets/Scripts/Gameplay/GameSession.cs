@@ -56,6 +56,7 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private PlayerLocomotion playerLocomotion;
 
         private PhoneControllerServer _server;
+        private CameraShake _cameraShake;
         private PlayerHealthState _health;
         private Mode _mode = Mode.Casual;
         private bool _isGameOver;
@@ -80,6 +81,10 @@ namespace PocketBlaster.Gameplay
             if (reticleController == null) reticleController = GetComponent<GyroReticleController>();
             if (stageDirector == null) stageDirector = FindFirstObjectByType<StageDirector>();
             if (playerLocomotion == null) playerLocomotion = GetComponent<PlayerLocomotion>();
+            // CameraShakeはカメラの実体(Lens、CameraRigFactory参照)に付いており、
+            // GameSessionとは別のGameObjectなのでFindFirstObjectByTypeで探す
+            // (オーナー承認2026-09-08、画面シェイク導入)。
+            _cameraShake = FindFirstObjectByType<CameraShake>();
 
             // BGM(2026-09-08、オーナー要望「同様のアーケードゲームと比べて機能や
             // UIやUXで足りていない部分を...実装する」——効果音はあったがループ音楽が
@@ -202,6 +207,7 @@ namespace PocketBlaster.Gameplay
 
             var isGameOverNow = _health.TakeDamage(amount);
             TriggerDamageFlash();
+            if (_cameraShake != null) _cameraShake.Shake(0.25f, 0.15f);
             if (isGameOverNow && _mode == Mode.Arcade)
             {
                 _isGameOver = true;

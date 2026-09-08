@@ -17,6 +17,39 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第9弾: 画面シェイク（2026-09-08、オーナー承認）
+
+第8弾で見送った画面シェイクを、オーナー承認を得てシーン階層の変更付きで実装した。
+影響範囲が複数ファイル・複数シーンに及ぶため、着手前に短い方針を提示して確認を
+取った(../CLAUDE.md §2)。
+
+- **`Assets/Editor/CameraRigFactory.cs`(新規)**: カメラ生成を「動かす側(リグ、
+  返り値の`rigGo`)」と「実体(Lens、子GameObject)」に分離する共通ヘルパー。
+  従来は各シーンビルダーが1つのGameObjectにCameraコンポーネントを直接持たせ、
+  `PlayerLocomotion.movableRoot`/`MultiplayerStageDirector.moveTarget`がそのTransformを
+  直接書き換えていた。Lens(子)にCamera・AudioListener・MainCameraタグを移すことで、
+  リグ側の既存の書き込みには一切触れずに済む。
+- **`Assets/Scripts/Gameplay/CameraShake.cs`(新規)**: Lens自身の`localPosition`に
+  ランダムな減衰オフセットを`LateUpdate`(リグ側のUpdateより後)で上乗せするだけの
+  独立コンポーネント。`Shake(duration, magnitude)`は進行中のシェイクより弱く・短い
+  要求を無視する(後発の小さいシェイクが大きい進行中のシェイクを弱めて見せない
+  ため)。
+- 5シーン(Milestone3_ShootTarget・Milestone4_Stage・Stage2_BossRush・
+  PracticeRange・MultiplayerCoop)すべてのカメラ生成コードを`CameraRigFactory.Create`
+  経由に置き換えた。`movableRoot`/`stageCamera`/`moveTarget`に渡す値(`rigGo.transform`
+  または`camera`)は従来通りで変更なし。
+- **発火**: `GameSession`/`MultiplayerStageDirector`の`TakeDamage`で
+  `CameraShake.Shake(0.25f, 0.15f)`(被弾のたびに0.25秒・振幅0.15m)。`CameraShake`は
+  `FindFirstObjectByType`で探す(別GameObjectのため)。
+- **確認方法**: EditMode 83件全て通過。5シーン全てを再ビルドし、シーンYAMLで
+  `Main Camera_Lens`という名前の子・`CameraShake`コンポーネント・
+  `m_TagString: MainCamera`がそれぞれちょうど1個だけ存在し、Camera/AudioListener
+  コンポーネントも重複せず1個のままであることを確認した。
+- **未検証**: 実機でのシェイクの強さの体感。理論上、レティクルのスクリーン座標
+  計算(`GyroReticleController`)はカメラのTransformに依存しない(gyro差分から
+  直接ピクセル位置を出す設計)ため、シェイク中でも狙いには影響しないはずだが、
+  実際の見え方・違和感の有無は未確認。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第8弾: マズルフラッシュ（2026-09-08）
 
 「画面演出(マズルフラッシュ・画面シェイク)」として一括りに見送っていたが、

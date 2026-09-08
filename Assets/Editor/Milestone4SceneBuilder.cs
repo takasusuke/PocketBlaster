@@ -53,13 +53,10 @@ namespace PocketBlaster.EditorTools
             playerRigGo.transform.position = waveWaypoints[0].position;
             playerRigGo.transform.rotation = waveWaypoints[0].rotation;
 
-            var cameraGo = new GameObject("Main Camera");
-            cameraGo.tag = "MainCamera";
+            var (cameraGo, camera, _) = CameraRigFactory.Create("Main Camera");
             cameraGo.transform.SetParent(playerRigGo.transform, false);
-            var camera = cameraGo.AddComponent<Camera>();
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.35f, 0.55f, 0.75f);
-            cameraGo.AddComponent<AudioListener>();
 
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
