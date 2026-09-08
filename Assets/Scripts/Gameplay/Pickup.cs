@@ -7,7 +7,12 @@ namespace PocketBlaster.Gameplay
     {
         Health,
         Reload,
-        AmmoUp
+        AmmoUp,
+        /// <summary>一定時間だけ1発の発射で扇状に複数レイを飛ばす特殊武器
+        /// (オーナー要望2026-09-08:「同様のアーケードゲームと比べて機能やUIやUXで
+        /// 足りていない部分を...実装する」——ショットガン等の一定時間だけ持てる
+        /// 特殊武器が定番なのに未実装だった)。AimHitResolver.TryHitSpread参照。</summary>
+        Shotgun
     }
 
     /// <summary>

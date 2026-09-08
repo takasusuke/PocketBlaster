@@ -248,7 +248,7 @@ namespace PocketBlaster.Gameplay
 
         private static PickupType ChooseRandomPickupType()
         {
-            var options = new[] { PickupType.Health, PickupType.Reload, PickupType.AmmoUp };
+            var options = new[] { PickupType.Health, PickupType.Reload, PickupType.AmmoUp, PickupType.Shotgun };
             return options[Random.Range(0, options.Length)];
         }
 

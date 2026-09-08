@@ -17,6 +17,35 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第6弾: ショットガン(特殊武器Pickup)（2026-09-08）
+
+「武器・アイテムの種類が弾薬回復/最大弾薬数増加/体力回復の3種類のみ」という指摘に対応した。
+
+- `Pickup.PickupType`に`Shotgun`を追加。専用アートは無く`PickupFactory.TypeColor`の
+  色分け円(ピンク/マゼンタ)にフォールバック——既存のAmmoUpと同じ扱い。
+- `AimHitResolver.TryHitSpread(centerRay, spreadAngleDegrees, rayCount, maxDistance,
+  layerMask)`(新規)を追加。中心のレイを基準に水平方向へ扇状に複数レイを飛ばし、
+  それぞれ独立して既存の`TryHit`で判定する`SpreadHitResult{HitCount,
+  HeadshotCount, HitShootables}`を返す。垂直方向には広げない(単純さのため)。
+- `GyroReticleController`/`MultiplayerAimController`の両方に、拾ってから8秒間だけ
+  発射を`TryHitSpread`(拡散角14度・5本)に切り替えるタイマー(`_shotgunTimer`)を追加。
+  1発の弾薬消費で複数命中しうる(`AmmoState.Shoot()`の消費は1回のまま変えていない)。
+  HUDの残弾表示に`"ショットガン {残り秒数}s"`をカウントダウン表示。
+  拡散中に扇の中へ別のPickupが入っていれば、それも`HitShootables`経由で効果が
+  適用される(既存の「`hitShootable is Pickup`ならアイテム効果」という分岐を
+  複数命中ぶんループするだけで対応でき、特殊化は不要だった)。
+- `StageDirector`/`MultiplayerStageDirector`の`ChooseRandomPickupType`候補配列に
+  `PickupType.Shotgun`を追加(アーケード/カジュアル両方、マルチプレイヤーも)。
+  マルチプレイヤーは個人の一時バフ(共有HPプールとは別——拾った本人だけ発動)。
+- **確認方法**: EditMode 83件全て通過(コンパイルエラー無しの確認が主目的——
+  `TryHitSpread`は`MonoBehaviour`依存の各Controller経由でしか呼ばれないため、
+  新規の純粋C#テストは追加していない。既存のPure C#クラス群のテストが壊れて
+  いないことだけを確認した)。`GyroReticleController`に
+  新規`[SerializeField]`(shotgunSpreadAngleDegrees等)が増えたため、これを含む
+  4シーン(Milestone3_ShootTarget・Milestone4_Stage・Stage2_BossRush・
+  PracticeRange)を再ビルドし、シーンYAMLに`shotgunSpreadAngleDegrees`が
+  焼き込まれたことを確認した。**実機での拡散角度・本数のバランスは未検証**。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第5弾: 敵の遠距離攻撃（2026-09-08）
 
 「近づかれ過ぎた」の一種類しか脅威が無く単調、という指摘に対応した。

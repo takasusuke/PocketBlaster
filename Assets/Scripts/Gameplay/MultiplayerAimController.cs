@@ -38,6 +38,11 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Camera aimCamera;
         [SerializeField] private LayerMask hitLayerMask = ~0;
         [SerializeField] private float maxHitDistance = 1000f;
+        // ショットガン(オーナー要望2026-09-08。GyroReticleControllerと同じ機能)。
+        [SerializeField] private float shotgunSpreadAngleDegrees = 14f;
+        [SerializeField] private int shotgunRayCount = 5;
+        [SerializeField] private float shotgunDurationSeconds = 8f;
+        private float _shotgunTimer;
 
         /// <summary>このプレイヤーが体力回復アイテムを撃った瞬間に中継される。
         /// `MultiplayerStageDirector`が購読し、共有HPプールを回復する。</summary>
@@ -134,6 +139,8 @@ namespace PocketBlaster.Gameplay
             _calibrationLabel.style.display = DisplayStyle.None;
             _reticle.style.display = DisplayStyle.Flex;
 
+            if (_shotgunTimer > 0f) _shotgunTimer -= Time.deltaTime;
+
             var betaDelta = Mathf.DeltaAngle(_refBeta, connection.LatestBeta);
             var gammaDelta = Mathf.DeltaAngle(_refGamma, connection.LatestGamma);
 
@@ -176,7 +183,8 @@ namespace PocketBlaster.Gameplay
                 _reloadBarTrack.style.display = DisplayStyle.None;
             }
 
-            _ammoLabel.text = _isReloading ? "リロード中..." : $"残弾 {_ammo.CurrentAmmo}/{_ammo.MagazineSize}";
+            var shotgunSuffix = _shotgunTimer > 0f ? $"\nショットガン {_shotgunTimer:F1}s" : "";
+            _ammoLabel.text = (_isReloading ? "リロード中..." : $"残弾 {_ammo.CurrentAmmo}/{_ammo.MagazineSize}") + shotgunSuffix;
             for (var i = 0; i < _ammoPips.Length; i++)
             {
                 var isLoaded = !_isReloading && i < _ammo.CurrentAmmo;
@@ -239,6 +247,18 @@ namespace PocketBlaster.Gameplay
                 _audioSource.PlayOneShot(_missClip);
                 OnShotResolved?.Invoke(false);
             }
+            else if (_shotgunTimer > 0f)
+            {
+                var spread = AimHitResolver.TryHitSpread(aimRay.Value, shotgunSpreadAngleDegrees, shotgunRayCount, maxHitDistance, hitLayerMask);
+                var didHit = spread.HitCount > 0;
+                _audioSource.PlayOneShot(didHit ? _hitClip : _missClip);
+                if (didHit) _hitFlashTimer = HitFlashDurationSeconds;
+                foreach (var hitShootable in spread.HitShootables)
+                {
+                    if (hitShootable is Pickup pickup) ApplyPickupEffect(pickup.Type);
+                }
+                OnShotResolved?.Invoke(didHit);
+            }
             else
             {
                 var result = AimHitResolver.TryHit(aimRay.Value, maxHitDistance, hitLayerMask, out var hitShootable);
@@ -269,6 +289,9 @@ namespace PocketBlaster.Gameplay
                     break;
                 case PickupType.Health:
                     OnHealthPickupCollected?.Invoke();
+                    break;
+                case PickupType.Shotgun:
+                    _shotgunTimer = shotgunDurationSeconds;
                     break;
             }
         }

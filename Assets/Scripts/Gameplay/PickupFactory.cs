@@ -65,6 +65,7 @@ namespace PocketBlaster.Gameplay
                 case PickupType.Health: return new Color(0.3f, 0.9f, 0.4f);
                 case PickupType.Reload: return new Color(0.3f, 0.6f, 1f);
                 case PickupType.AmmoUp: return new Color(1f, 0.85f, 0.2f);
+                case PickupType.Shotgun: return new Color(0.9f, 0.35f, 0.85f);
                 default: return Color.white;
             }
         }

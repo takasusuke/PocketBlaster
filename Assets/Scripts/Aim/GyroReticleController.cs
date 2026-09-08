@@ -58,6 +58,14 @@ namespace PocketBlaster.Aim
         [SerializeField] private float recoilRecoverySpeedPixelsPerSecond = 260f;
         private float _recoilOffsetPixels;
 
+        // ショットガン(オーナー要望、2026-09-08:「同様のアーケードゲームと比べて
+        // 機能やUIやUXで足りていない部分を...実装する」——一定時間だけ持てる特殊武器が
+        // 定番なのに未実装だった)。Pickup(PickupType.Shotgun)取得で一定時間だけ、
+        // 1発の弾薬消費で扇状に複数レイを飛ばす(AimHitResolver.TryHitSpread参照)。
+        [SerializeField] private float shotgunSpreadAngleDegrees = 14f;
+        [SerializeField] private int shotgunRayCount = 5;
+        private float _shotgunTimer;
+
         /// <summary>
         /// PC上でマウスでも狙えるようにする(オーナー要望、2026-09-06:「あくまでデバッグを
         /// 容易にするため」)。実機(スマホ)が無くてもPlay Modeだけで狙撃・命中判定を
@@ -249,6 +257,7 @@ namespace PocketBlaster.Aim
             // リコイルは常に基準へ向けて減衰させる(構えていない間も蓄積が残ったままに
             // ならないように)。
             _recoilOffsetPixels = Mathf.MoveTowards(_recoilOffsetPixels, 0f, recoilRecoverySpeedPixelsPerSecond * Time.deltaTime);
+            if (_shotgunTimer > 0f) _shotgunTimer -= Time.deltaTime;
 
             float x, y;
             if (isAimActive)
@@ -316,9 +325,10 @@ namespace PocketBlaster.Aim
             // オーナーからのプレイテストFB(2026-09-06)「残り弾数をゲーム画面に表示して」を
             // 受けて、上のammoLine(詳細デバッグ表示の一部)とは別に、見つけやすい大きな
             // 専用表示を画面右下に出す。
-            _ammoLabel.text = _isReloading
+            var shotgunSuffix = _shotgunTimer > 0f ? $"\nショットガン {_shotgunTimer:F1}s" : "";
+            _ammoLabel.text = (_isReloading
                 ? "リロード中..."
-                : $"残弾 {_ammo.CurrentAmmo} / {_ammo.MagazineSize}";
+                : $"残弾 {_ammo.CurrentAmmo} / {_ammo.MagazineSize}") + shotgunSuffix;
             _ammoLabel.style.color = (_ammo.CurrentAmmo == 0 && !_isReloading)
                 ? new Color(1f, 0.35f, 0.35f)
                 : Color.white;
@@ -432,6 +442,19 @@ namespace PocketBlaster.Aim
                 return false;
             }
 
+            // ショットガン中は扇状に複数レイを飛ばす(オーナー要望2026-09-08、
+            // Pickup.PickupType.Shotgun参照)。命中対象への効果適用(TakeHit/TakeHeadshot)
+            // はAimHitResolver内で既に行われているため、ここでは命中の有無だけ見ればよい
+            // ——アイテムの効果適用は通常時と同じくStageDirector.HandlePickupConsumedが
+            // Pickup.OnConsumed経由で行う(誰が撃ったかを問わない設計、複数命中しても
+            // 同様に効く)。
+            if (_shotgunTimer > 0f)
+            {
+                var spread = AimHitResolver.TryHitSpread(aimRay.Value, shotgunSpreadAngleDegrees, shotgunRayCount, maxHitDistance, hitLayerMask);
+                _audioSource.PlayOneShot(spread.HitCount > 0 ? _hitClip : _missClip);
+                return spread.HitCount > 0;
+            }
+
             // 判定そのものはAimHitResolverへ委譲する(2026-09-07、マルチプレイヤーモード
             // 追加に伴い、MultiplayerAimControllerと共有するために切り出した。振る舞いは
             // 変えていない——効果音の再生だけこちら側の責務として残す)。何に当たったかは
@@ -462,6 +485,13 @@ namespace PocketBlaster.Aim
         public void ApplyAmmoUpPickup(int amount)
         {
             _ammo.IncreaseMagazineSize(amount);
+        }
+
+        /// <summary>アイテム(Pickup)経由でのショットガン化(オーナー要望2026-09-08)。
+        /// 既に効果中なら残り時間を上書きする(延長ではなく、取り直した分で再スタート)。</summary>
+        public void ApplyShotgunPickup(float durationSeconds)
+        {
+            _shotgunTimer = durationSeconds;
         }
 
         private void SetReticleColor(Color color)

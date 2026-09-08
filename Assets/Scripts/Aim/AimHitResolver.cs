@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PocketBlaster.Gameplay;
 using UnityEngine;
 
@@ -68,6 +69,41 @@ namespace PocketBlaster.Aim
             }
 
             return Result.Miss;
+        }
+
+        /// <summary>ショットガン系の特殊武器(オーナー要望2026-09-08、Pickup.PickupType.
+        /// Shotgun参照)用。中心のレイを基準に水平方向へ扇状に<paramref name="rayCount"/>本の
+        /// レイを飛ばし、それぞれ独立して<see cref="TryHit"/>する——1発の弾薬消費で
+        /// 複数の敵/アイテムに同時命中しうる。垂直方向には広げない(単純さのため)。</summary>
+        public struct SpreadHitResult
+        {
+            public int HitCount;
+            public int HeadshotCount;
+            public List<IShootable> HitShootables;
+        }
+
+        public static SpreadHitResult TryHitSpread(Ray centerRay, float spreadAngleDegrees, int rayCount, float maxDistance, LayerMask layerMask)
+        {
+            var result = new SpreadHitResult { HitShootables = new List<IShootable>() };
+            var safeRayCount = Mathf.Max(rayCount, 1);
+
+            for (var i = 0; i < safeRayCount; i++)
+            {
+                var angleOffset = safeRayCount == 1
+                    ? 0f
+                    : Mathf.Lerp(-spreadAngleDegrees / 2f, spreadAngleDegrees / 2f, i / (float)(safeRayCount - 1));
+                var direction = Quaternion.AngleAxis(angleOffset, Vector3.up) * centerRay.direction;
+                var ray = new Ray(centerRay.origin, direction);
+
+                var hitResult = TryHit(ray, maxDistance, layerMask, out var hitShootable);
+                if (hitResult == Result.Miss) continue;
+
+                result.HitCount++;
+                if (hitResult == Result.Headshot) result.HeadshotCount++;
+                if (hitShootable != null) result.HitShootables.Add(hitShootable);
+            }
+
+            return result;
         }
     }
 }

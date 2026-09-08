@@ -162,8 +162,8 @@ namespace PocketBlaster.Gameplay
             // カジュアルモードには残機の概念が無いため、体力回復アイテムは
             // アーケードモードの時だけ候補に入れる。
             var options = GameSettings.Current.IsArcadeMode
-                ? new[] { PickupType.Health, PickupType.Reload, PickupType.AmmoUp }
-                : new[] { PickupType.Reload, PickupType.AmmoUp };
+                ? new[] { PickupType.Health, PickupType.Reload, PickupType.AmmoUp, PickupType.Shotgun }
+                : new[] { PickupType.Reload, PickupType.AmmoUp, PickupType.Shotgun };
             return options[Random.Range(0, options.Length)];
         }
 
@@ -183,6 +183,9 @@ namespace PocketBlaster.Gameplay
                     break;
                 case PickupType.AmmoUp:
                     if (reticleController != null) reticleController.ApplyAmmoUpPickup(2);
+                    break;
+                case PickupType.Shotgun:
+                    if (reticleController != null) reticleController.ApplyShotgunPickup(8f);
                     break;
             }
         }
