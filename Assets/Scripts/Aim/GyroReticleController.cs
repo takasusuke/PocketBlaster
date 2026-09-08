@@ -150,6 +150,18 @@ namespace PocketBlaster.Aim
         private const float HitFlashDurationSeconds = 0.12f;
         private float _hitFlashTimer;
 
+        // マズルフラッシュ(オーナー要望2026-09-08「同様のアーケードゲームと比べて
+        // 足りていない部分を...実装する」)。画面シェイクはPlayerLocomotion/
+        // MultiplayerStageDirector.MoveCameraToが直接CameraのTransformを書き換えており、
+        // シェイク用オフセットを安全に重ねるには「最後に上乗せする」設計変更が要るため
+        // 見送っているが(docs/requirements.md参照)、マズルフラッシュはCameraの
+        // Transformに一切触れない画面全体のUIオーバーレイなので、その制約を受けずに
+        // 実装できる。命中の有無に関わらず、弾を発射した瞬間に必ず短く光らせる
+        // (実弾を撃ったこと自体のフィードバック、ヒットマーカーとは別の役割)。
+        private const float MuzzleFlashDurationSeconds = 0.05f;
+        private float _muzzleFlashTimer;
+        private VisualElement _muzzleFlashOverlay;
+
         private void Awake()
         {
             // GetComponentではなくGetOrCreate() — PhoneControllerServerはシーンをまたぐ
@@ -216,6 +228,17 @@ namespace PocketBlaster.Aim
 
             _timeSinceReload += Time.deltaTime;
             if (_emptyClickFlashTimer > 0f) _emptyClickFlashTimer -= Time.deltaTime;
+
+            if (_muzzleFlashTimer > 0f)
+            {
+                _muzzleFlashTimer -= Time.deltaTime;
+                var alpha = Mathf.Clamp01(_muzzleFlashTimer / MuzzleFlashDurationSeconds) * 0.25f;
+                _muzzleFlashOverlay.style.backgroundColor = new Color(1f, 1f, 0.9f, alpha);
+            }
+            else
+            {
+                _muzzleFlashOverlay.style.backgroundColor = new Color(1f, 1f, 0.9f, 0f);
+            }
 
             // Mathf.DeltaAngleで0/360境界をまたぐ回転(スマホの向き=alphaをwebapp側で
             // 左右方向に割り当てた場合)でも正しい符号付き差分になるようにする。
@@ -371,6 +394,7 @@ namespace PocketBlaster.Aim
             }
 
             _audioSource.PlayOneShot(_shotClip);
+            _muzzleFlashTimer = MuzzleFlashDurationSeconds;
             var didHit = TryHitTargetAtReticle();
             _lastShotResult = didHit ? "命中" : "はずれ";
             if (didHit) _hitFlashTimer = HitFlashDurationSeconds;
@@ -655,6 +679,18 @@ namespace PocketBlaster.Aim
                 _ammoPipsContainer.Add(pip);
                 _ammoPips[i] = pip;
             }
+
+            // マズルフラッシュ(画面全体の薄いオーバーレイ)。全ての上に重ねる——
+            // pickingModeをIgnoreにしないと、透明な部分もクリック/タッチ判定を奪ってしまう。
+            _muzzleFlashOverlay = new VisualElement();
+            _muzzleFlashOverlay.style.position = Position.Absolute;
+            _muzzleFlashOverlay.style.left = 0;
+            _muzzleFlashOverlay.style.right = 0;
+            _muzzleFlashOverlay.style.top = 0;
+            _muzzleFlashOverlay.style.bottom = 0;
+            _muzzleFlashOverlay.style.backgroundColor = new Color(1f, 1f, 0.9f, 0f);
+            _muzzleFlashOverlay.pickingMode = PickingMode.Ignore;
+            root.Add(_muzzleFlashOverlay);
         }
     }
 }

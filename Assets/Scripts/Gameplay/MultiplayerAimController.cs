@@ -62,6 +62,11 @@ namespace PocketBlaster.Gameplay
         private const float HitFlashDurationSeconds = 0.12f;
         private float _hitFlashTimer;
 
+        // マズルフラッシュ(オーナー要望2026-09-08。GyroReticleControllerと同じ機能)。
+        private const float MuzzleFlashDurationSeconds = 0.05f;
+        private float _muzzleFlashTimer;
+        private VisualElement _muzzleFlashOverlay;
+
         private int _connectionId;
         private int _slot;
         private Color _playerColor;
@@ -140,6 +145,17 @@ namespace PocketBlaster.Gameplay
             _reticle.style.display = DisplayStyle.Flex;
 
             if (_shotgunTimer > 0f) _shotgunTimer -= Time.deltaTime;
+
+            if (_muzzleFlashTimer > 0f)
+            {
+                _muzzleFlashTimer -= Time.deltaTime;
+                var flashAlpha = Mathf.Clamp01(_muzzleFlashTimer / MuzzleFlashDurationSeconds) * 0.25f;
+                _muzzleFlashOverlay.style.backgroundColor = new Color(1f, 1f, 0.9f, flashAlpha);
+            }
+            else
+            {
+                _muzzleFlashOverlay.style.backgroundColor = new Color(1f, 1f, 0.9f, 0f);
+            }
 
             var betaDelta = Mathf.DeltaAngle(_refBeta, connection.LatestBeta);
             var gammaDelta = Mathf.DeltaAngle(_refGamma, connection.LatestGamma);
@@ -240,6 +256,7 @@ namespace PocketBlaster.Gameplay
                 return;
             }
             _audioSource.PlayOneShot(_shotClip);
+            _muzzleFlashTimer = MuzzleFlashDurationSeconds;
 
             var aimRay = GetAimRay();
             if (aimRay == null)
@@ -413,6 +430,19 @@ namespace PocketBlaster.Gameplay
                 _ammoPipsContainer.Add(pip);
                 _ammoPips[i] = pip;
             }
+
+            // マズルフラッシュ(GyroReticleControllerと同じ仕組み)。両プレイヤーの
+            // オーバーレイが同じ画面(画面共有方式)に重なるが、アルファが低く一瞬
+            // (0.05秒)なので、同時発射でも過度に眩しくはならない。
+            _muzzleFlashOverlay = new VisualElement();
+            _muzzleFlashOverlay.style.position = Position.Absolute;
+            _muzzleFlashOverlay.style.left = 0;
+            _muzzleFlashOverlay.style.right = 0;
+            _muzzleFlashOverlay.style.top = 0;
+            _muzzleFlashOverlay.style.bottom = 0;
+            _muzzleFlashOverlay.style.backgroundColor = new Color(1f, 1f, 0.9f, 0f);
+            _muzzleFlashOverlay.pickingMode = PickingMode.Ignore;
+            root.Add(_muzzleFlashOverlay);
         }
     }
 }
