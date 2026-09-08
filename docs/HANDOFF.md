@@ -17,6 +17,30 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第7弾: ボスHPバー（2026-09-08）
+
+「`Stage2_BossRush`という名前のステージなのに、ボスに専用のHP表示が無い」という
+不足に対応した。House of the Dead/Point Blank等はボス戦で画面上部にHPバーを
+出すのが定番。
+
+- `Target`に`isBoss`(既定false)を追加、`IsBoss`/`RemainingHitPoints`/`MaxHitPoints`
+  を公開した(`RemainingHitPoints`/`MaxHitPoints`自体は元々`TargetHitState`側に
+  あったが、`Target`からは非公開だった)。
+- `EnemyFactory.VegetableProfile`に`IsBoss`を追加し、**パンプキンボスにだけ**true
+  にした。hitPoints>1では判定しなかった——オニオン(hitPoints=2)も多段ヒットだが
+  ボスと呼べる敵ではないため、明示的なフラグにした。
+- `StageDirector`/`MultiplayerStageDirector`の`StartNextWave`で、ウェーブ内の
+  `IsBoss`なTargetを`System.Array.Find`で検出し、見つかればHPバーを表示して
+  `Target.OnHit`(既存、被弾のたびに発火)を購読して更新する。倒された/近づかれ過ぎた
+  いずれの退場でも購読解除してバーを隠す(`ClearCurrentBoss`)。
+- 見た目はマルチプレイヤーの共有HPバーと同じtrack+fillパターンを流用(色は敵側なので
+  赤系)。シングルプレイヤーはスコアの下(top:56)、マルチプレイヤーは共有HPバーの
+  すぐ下(top:84)に配置。
+- **確認方法**: EditMode 83件全て通過。`Target`の新規`[SerializeField]`(isBoss)を
+  含む、パンプキンボスが登場する3シーン(Milestone4_Stage・Stage2_BossRush・
+  MultiplayerCoop)を再ビルドし、各シーンにちょうど1体だけ`isBoss: 1`が
+  焼き込まれたことを確認した。**実機でのバーの見やすさ・配置は未検証**。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第6弾: ショットガン(特殊武器Pickup)（2026-09-08）
 
 「武器・アイテムの種類が弾薬回復/最大弾薬数増加/体力回復の3種類のみ」という指摘に対応した。

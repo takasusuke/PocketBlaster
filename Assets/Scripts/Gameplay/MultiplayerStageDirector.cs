@@ -86,6 +86,10 @@ namespace PocketBlaster.Gameplay
         private Label _pauseLabel;
         private VisualElement _healthBarTrack;
         private VisualElement _healthBarFill;
+        private VisualElement _bossHealthBarTrack;
+        private VisualElement _bossHealthBarFill;
+        private Label _bossHealthBarLabel;
+        private Target _currentBoss;
         private VisualElement _damageFlash;
         private Coroutine _cameraMoveRoutine;
         private Coroutine _damageFlashRoutine;
@@ -141,6 +145,7 @@ namespace PocketBlaster.Gameplay
                 _server.OnRetryRequested -= HandleRetryRequested;
                 _server.OnReturnToTitleRequested -= HandleReturnToTitleRequested;
             }
+            if (_currentBoss != null) _currentBoss.OnHit -= UpdateBossHealthBar;
             if (_panelSettings != null) Destroy(_panelSettings);
             Time.timeScale = 1f;
         }
@@ -217,6 +222,14 @@ namespace PocketBlaster.Gameplay
 
             UpdateWaveLabel();
             MaybeSpawnPickup(wave);
+
+            // ボスHPバー(オーナー要望2026-09-08、StageDirectorと同じ仕組み)。
+            _currentBoss = System.Array.Find(wave.enemies, e => e.IsBoss);
+            if (_currentBoss != null)
+            {
+                _currentBoss.OnHit += UpdateBossHealthBar;
+                ShowBossHealthBar();
+            }
 
             if (wave.cameraWaypoint != null)
             {
@@ -312,13 +325,43 @@ namespace PocketBlaster.Gameplay
             var points = Mathf.RoundToInt(basePoints * _combo.Multiplier);
             _score.AddPoints(points);
             ScorePopupEffect.SpawnAt(defeatedTarget.transform.position, points, stageCamera);
+            if (defeatedTarget == _currentBoss) ClearCurrentBoss();
             AdvanceWaveState();
         }
 
         private void HandleEnemyReachedPlayer(Target reachedTarget)
         {
+            if (reachedTarget == _currentBoss) ClearCurrentBoss();
             AdvanceWaveState();
             TakeDamage(enemyContactDamage, "敵の接近");
+        }
+
+        private void ClearCurrentBoss()
+        {
+            if (_currentBoss == null) return;
+            _currentBoss.OnHit -= UpdateBossHealthBar;
+            _currentBoss = null;
+            HideBossHealthBar();
+        }
+
+        private void ShowBossHealthBar()
+        {
+            _bossHealthBarTrack.style.display = DisplayStyle.Flex;
+            UpdateBossHealthBar();
+        }
+
+        private void HideBossHealthBar()
+        {
+            _bossHealthBarTrack.style.display = DisplayStyle.None;
+        }
+
+        private void UpdateBossHealthBar()
+        {
+            if (_currentBoss == null) return;
+            var ratio = _currentBoss.MaxHitPoints > 0
+                ? _currentBoss.RemainingHitPoints / (float)_currentBoss.MaxHitPoints
+                : 0f;
+            _bossHealthBarFill.style.width = Length.Percent(Mathf.Clamp01(ratio) * 100f);
         }
 
         /// <summary>敵の遠距離攻撃が命中した場合(オーナー要望2026-09-08)。共有HPへ
@@ -562,6 +605,47 @@ namespace PocketBlaster.Gameplay
             _healthBarFill.style.borderBottomLeftRadius = 4;
             _healthBarFill.style.borderBottomRightRadius = 4;
             _healthBarTrack.Add(_healthBarFill);
+
+            // ボスHPバー(オーナー要望2026-09-08)。共有HPバーのすぐ下、通常時は非表示。
+            _bossHealthBarTrack = new VisualElement();
+            _bossHealthBarTrack.style.display = DisplayStyle.None;
+            _bossHealthBarTrack.style.position = Position.Absolute;
+            _bossHealthBarTrack.style.top = 84;
+            _bossHealthBarTrack.style.left = Length.Percent(50);
+            _bossHealthBarTrack.style.translate = new Translate(Length.Percent(-50), 0);
+            _bossHealthBarTrack.style.width = 260;
+            _bossHealthBarTrack.style.height = 20;
+            _bossHealthBarTrack.style.backgroundColor = new Color(0f, 0f, 0f, 0.5f);
+            _bossHealthBarTrack.style.borderTopLeftRadius = 4;
+            _bossHealthBarTrack.style.borderTopRightRadius = 4;
+            _bossHealthBarTrack.style.borderBottomLeftRadius = 4;
+            _bossHealthBarTrack.style.borderBottomRightRadius = 4;
+            root.Add(_bossHealthBarTrack);
+
+            _bossHealthBarFill = new VisualElement();
+            _bossHealthBarFill.style.position = Position.Absolute;
+            _bossHealthBarFill.style.left = 0;
+            _bossHealthBarFill.style.top = 0;
+            _bossHealthBarFill.style.bottom = 0;
+            _bossHealthBarFill.style.width = Length.Percent(100);
+            _bossHealthBarFill.style.backgroundColor = new Color(0.85f, 0.15f, 0.15f);
+            _bossHealthBarFill.style.borderTopLeftRadius = 4;
+            _bossHealthBarFill.style.borderTopRightRadius = 4;
+            _bossHealthBarFill.style.borderBottomLeftRadius = 4;
+            _bossHealthBarFill.style.borderBottomRightRadius = 4;
+            _bossHealthBarTrack.Add(_bossHealthBarFill);
+
+            _bossHealthBarLabel = new Label("ボス");
+            _bossHealthBarLabel.style.position = Position.Absolute;
+            _bossHealthBarLabel.style.left = 0;
+            _bossHealthBarLabel.style.right = 0;
+            _bossHealthBarLabel.style.top = 0;
+            _bossHealthBarLabel.style.bottom = 0;
+            _bossHealthBarLabel.style.color = Color.white;
+            _bossHealthBarLabel.style.fontSize = 13;
+            _bossHealthBarLabel.style.unityTextAlign = TextAnchor.MiddleCenter;
+            RuntimeLabelStyle.ApplyDefaultFont(_bossHealthBarLabel);
+            _bossHealthBarTrack.Add(_bossHealthBarLabel);
 
             _gradeLabel = new Label();
             _gradeLabel.style.display = DisplayStyle.None;

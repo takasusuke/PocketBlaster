@@ -34,8 +34,9 @@ namespace PocketBlaster.EditorTools
             public readonly float WeaveFrequency;
             public readonly int PointValue;
             public readonly bool EnableRangedAttack;
+            public readonly bool IsBoss;
 
-            public VegetableProfile(int hitPoints, float approachSpeed, float weaveAmplitude, float weaveFrequency, int pointValue, bool enableRangedAttack = false)
+            public VegetableProfile(int hitPoints, float approachSpeed, float weaveAmplitude, float weaveFrequency, int pointValue, bool enableRangedAttack = false, bool isBoss = false)
             {
                 HitPoints = hitPoints;
                 ApproachSpeed = approachSpeed;
@@ -43,6 +44,7 @@ namespace PocketBlaster.EditorTools
                 WeaveFrequency = weaveFrequency;
                 PointValue = pointValue;
                 EnableRangedAttack = enableRangedAttack;
+                IsBoss = isBoss;
             }
         }
 
@@ -57,7 +59,7 @@ namespace PocketBlaster.EditorTools
             { VegetableKind.Tomato, new VegetableProfile(hitPoints: 1, approachSpeed: 1.5f, weaveAmplitude: 0f, weaveFrequency: 0f, pointValue: 100) },
             { VegetableKind.Carrot, new VegetableProfile(hitPoints: 1, approachSpeed: 1.0f, weaveAmplitude: 1.0f, weaveFrequency: 1.6f, pointValue: 130) },
             { VegetableKind.Onion, new VegetableProfile(hitPoints: 2, approachSpeed: 0.6f, weaveAmplitude: 0f, weaveFrequency: 0f, pointValue: 180, enableRangedAttack: true) },
-            { VegetableKind.PumpkinBoss, new VegetableProfile(hitPoints: 3, approachSpeed: 0.55f, weaveAmplitude: 0.35f, weaveFrequency: 0.4f, pointValue: 500, enableRangedAttack: true) },
+            { VegetableKind.PumpkinBoss, new VegetableProfile(hitPoints: 3, approachSpeed: 0.55f, weaveAmplitude: 0.35f, weaveFrequency: 0.4f, pointValue: 500, enableRangedAttack: true, isBoss: true) },
         };
 
         public static Target CreateVegetableZombie(
@@ -87,6 +89,7 @@ namespace PocketBlaster.EditorTools
             so.FindProperty("juiceColor").colorValue = juiceColor;
             so.FindProperty("hitPoints").intValue = profile.HitPoints;
             so.FindProperty("pointValue").intValue = profile.PointValue;
+            so.FindProperty("isBoss").boolValue = profile.IsBoss;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             // 頭部の当たり判定(オーナー要望、2026-09-06:「敵のヘッドショットなど部位別の

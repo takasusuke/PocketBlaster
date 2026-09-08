@@ -27,6 +27,13 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private Color juiceColor = Color.red;
         [SerializeField] private int hitPoints = 1;
         [SerializeField] private int pointValue = 100;
+        /// <summary>ボスHPバー表示の対象かどうか(オーナー要望2026-09-08:「同様の
+        /// アーケードゲームと比べて足りていない部分を...実装する」——Stage2_BossRush
+        /// という名前のステージにボス専用HPバーが無かった)。hitPoints&gt;1というだけの
+        /// 判定にしなかったのは、オニオン(hitPoints=2)のような「多段ヒットだがボスでは
+        /// ない」敵まで拾ってしまうため——見た目・意味づけの両方でボスと呼べる敵にだけ
+        /// 明示的に付与する(EnemyFactory.VegetableProfile.IsBoss参照)。</summary>
+        [SerializeField] private bool isBoss;
 
         /// <summary>撃たれるたびに呼ばれる(復帰する場合も含む)</summary>
         public event System.Action OnHit;
@@ -37,6 +44,10 @@ namespace PocketBlaster.Gameplay
         public event System.Action<Target> OnDefeated;
 
         public int PointValue => pointValue;
+        public bool IsBoss => isBoss;
+        /// <summary>ボスHPバー表示用。TargetHitStateの被弾回数をそのまま公開する。</summary>
+        public int RemainingHitPoints => _state.RemainingHitPoints;
+        public int MaxHitPoints => _state.MaxHitPoints;
         /// <summary>直近の被弾がヘッドショット(即死判定)だったか。StageDirectorが
         /// 得点ボーナスの判定に使う(オーナー要望2026-09-06、HeadHitbox参照)。</summary>
         public bool WasLastHitHeadshot { get; private set; }
