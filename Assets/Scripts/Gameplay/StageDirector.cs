@@ -57,6 +57,13 @@ namespace PocketBlaster.Gameplay
         public event System.Action OnEnemyReachedPlayer;
 
         /// <summary>
+        /// 敵の遠距離攻撃が命中した(EnemyApproach.OnRangedAttackHit)瞬間に中継される
+        /// (オーナー要望2026-09-08)。引数はダメージ量。「近づかれ過ぎた」とは別の
+        /// ダメージ源として扱う——GameSessionが理由文言を分けて表示する。
+        /// </summary>
+        public event System.Action<int> OnEnemyRangedAttackHit;
+
+        /// <summary>
         /// 体力回復アイテムを取得した瞬間に中継される(オーナー要望、2026-09-06:
         /// 「撃つとプレイヤーの体力を回復するアイテム」)。GameSessionがHPゲージの
         /// 回復に使う(PlayerHealthState参照)。
@@ -118,7 +125,11 @@ namespace PocketBlaster.Gameplay
                 enemy.gameObject.SetActive(true);
                 enemy.OnDefeated += HandleEnemyDefeated;
                 var approach = enemy.GetComponent<EnemyApproach>();
-                if (approach != null) approach.OnReachedPlayer += HandleEnemyReachedPlayer;
+                if (approach != null)
+                {
+                    approach.OnReachedPlayer += HandleEnemyReachedPlayer;
+                    approach.OnRangedAttackHit += HandleEnemyRangedAttackHit;
+                }
             }
 
             UpdateWaveLabel();
@@ -234,6 +245,13 @@ namespace PocketBlaster.Gameplay
             AdvanceWaveState();
         }
 
+        /// <summary>敵の遠距離攻撃が命中した場合(オーナー要望2026-09-08)。ウェーブの
+        /// 進行(残り数)には影響しない——敵はまだ生きて攻撃を続けるため。</summary>
+        private void HandleEnemyRangedAttackHit(int damage)
+        {
+            OnEnemyRangedAttackHit?.Invoke(damage);
+        }
+
         private void AdvanceWaveState()
         {
             var wave = waves[_progress.CurrentWaveIndex];
@@ -246,7 +264,11 @@ namespace PocketBlaster.Gameplay
                 {
                     enemy.OnDefeated -= HandleEnemyDefeated;
                     var approach = enemy.GetComponent<EnemyApproach>();
-                    if (approach != null) approach.OnReachedPlayer -= HandleEnemyReachedPlayer;
+                    if (approach != null)
+                    {
+                        approach.OnReachedPlayer -= HandleEnemyReachedPlayer;
+                        approach.OnRangedAttackHit -= HandleEnemyRangedAttackHit;
+                    }
                 }
                 ClearCurrentPickup();
                 StartNextWave();

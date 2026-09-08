@@ -208,7 +208,11 @@ namespace PocketBlaster.Gameplay
                 enemy.gameObject.SetActive(true);
                 enemy.OnDefeated += HandleEnemyDefeated;
                 var approach = enemy.GetComponent<EnemyApproach>();
-                if (approach != null) approach.OnReachedPlayer += HandleEnemyReachedPlayer;
+                if (approach != null)
+                {
+                    approach.OnReachedPlayer += HandleEnemyReachedPlayer;
+                    approach.OnRangedAttackHit += HandleEnemyRangedAttackHit;
+                }
             }
 
             UpdateWaveLabel();
@@ -317,6 +321,13 @@ namespace PocketBlaster.Gameplay
             TakeDamage(enemyContactDamage, "敵の接近");
         }
 
+        /// <summary>敵の遠距離攻撃が命中した場合(オーナー要望2026-09-08)。共有HPへ
+        /// 反映するだけで、ウェーブの進行(残り数)には影響しない。</summary>
+        private void HandleEnemyRangedAttackHit(int damage)
+        {
+            TakeDamage(damage, "遠距離攻撃");
+        }
+
         private void AdvanceWaveState()
         {
             var wave = waves[_progress.CurrentWaveIndex];
@@ -329,7 +340,11 @@ namespace PocketBlaster.Gameplay
                 {
                     enemy.OnDefeated -= HandleEnemyDefeated;
                     var approach = enemy.GetComponent<EnemyApproach>();
-                    if (approach != null) approach.OnReachedPlayer -= HandleEnemyReachedPlayer;
+                    if (approach != null)
+                    {
+                        approach.OnReachedPlayer -= HandleEnemyReachedPlayer;
+                        approach.OnRangedAttackHit -= HandleEnemyRangedAttackHit;
+                    }
                 }
                 ClearCurrentPickup();
                 StartNextWave();

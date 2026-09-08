@@ -33,27 +33,31 @@ namespace PocketBlaster.EditorTools
             public readonly float WeaveAmplitude;
             public readonly float WeaveFrequency;
             public readonly int PointValue;
+            public readonly bool EnableRangedAttack;
 
-            public VegetableProfile(int hitPoints, float approachSpeed, float weaveAmplitude, float weaveFrequency, int pointValue)
+            public VegetableProfile(int hitPoints, float approachSpeed, float weaveAmplitude, float weaveFrequency, int pointValue, bool enableRangedAttack = false)
             {
                 HitPoints = hitPoints;
                 ApproachSpeed = approachSpeed;
                 WeaveAmplitude = weaveAmplitude;
                 WeaveFrequency = weaveFrequency;
                 PointValue = pointValue;
+                EnableRangedAttack = enableRangedAttack;
             }
         }
 
         // トマト: 1発で倒れる代わりに足が速く、まっすぐ突っ込んでくる(反応速度を試す型)。
         // キャロット: すばしっこく、左右に大きく避けながら接近する(狙いを絞らせない型)。
-        // オニオン: 硬く(2発)、その分足は遅い(見た目に反して脅威度が高い型)。
+        // オニオン: 硬く(2発)、その分足は遅い(見た目に反して脅威度が高い型)——遅さを
+        // 補うため遠距離攻撃を持つ(オーナー要望2026-09-08、EnemyApproach参照)。
         // パンプキンボス: 硬く(3発)、足は遅いが軽く揺れながら迫る(ボスらしい重厚感)。
+        // ボスも同じ理由で遠距離攻撃を持つ——足が遅いだけでは脅威度が足りないため。
         private static readonly Dictionary<VegetableKind, VegetableProfile> Profiles = new Dictionary<VegetableKind, VegetableProfile>
         {
             { VegetableKind.Tomato, new VegetableProfile(hitPoints: 1, approachSpeed: 1.5f, weaveAmplitude: 0f, weaveFrequency: 0f, pointValue: 100) },
             { VegetableKind.Carrot, new VegetableProfile(hitPoints: 1, approachSpeed: 1.0f, weaveAmplitude: 1.0f, weaveFrequency: 1.6f, pointValue: 130) },
-            { VegetableKind.Onion, new VegetableProfile(hitPoints: 2, approachSpeed: 0.6f, weaveAmplitude: 0f, weaveFrequency: 0f, pointValue: 180) },
-            { VegetableKind.PumpkinBoss, new VegetableProfile(hitPoints: 3, approachSpeed: 0.55f, weaveAmplitude: 0.35f, weaveFrequency: 0.4f, pointValue: 500) },
+            { VegetableKind.Onion, new VegetableProfile(hitPoints: 2, approachSpeed: 0.6f, weaveAmplitude: 0f, weaveFrequency: 0f, pointValue: 180, enableRangedAttack: true) },
+            { VegetableKind.PumpkinBoss, new VegetableProfile(hitPoints: 3, approachSpeed: 0.55f, weaveAmplitude: 0.35f, weaveFrequency: 0.4f, pointValue: 500, enableRangedAttack: true) },
         };
 
         public static Target CreateVegetableZombie(
@@ -110,6 +114,7 @@ namespace PocketBlaster.EditorTools
                 approachSo.FindProperty("damageRange").floatValue = damageRange;
                 approachSo.FindProperty("weaveAmplitude").floatValue = profile.WeaveAmplitude;
                 approachSo.FindProperty("weaveFrequency").floatValue = profile.WeaveFrequency;
+                approachSo.FindProperty("enableRangedAttack").boolValue = profile.EnableRangedAttack;
                 approachSo.ApplyModifiedPropertiesWithoutUndo();
             }
 

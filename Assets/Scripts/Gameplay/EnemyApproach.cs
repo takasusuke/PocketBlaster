@@ -30,6 +30,13 @@ namespace PocketBlaster.Gameplay
     /// 直進の基準位置(<see cref="_basePosition"/>)をまっすぐ進め、実際の見た目の位置は
     /// そこから進行方向に垂直な向きへサイン波で振らせる — 判定(damageRange)は蛇行前の
     /// 基準位置で行うため、見た目のブレで到達判定がバタつくことはない。
+    ///
+    /// 遠距離攻撃(オーナー要望2026-09-08:「同様のアーケードゲームと比べて機能や
+    /// UIやUXで足りていない部分を...実装する」——House of the Dead等では近づかれる前
+    /// から撃ち返してくるが、こちらは「近づかれ過ぎた」の一種類しか脅威が無く単調
+    /// だった)。`enableRangedAttack`をオンにした種類(EnemyFactoryのVegetableProfile
+    /// 参照——足の遅いオニオン・ボスに付与し、遅さを遠距離攻撃で補う設計)は、
+    /// 接触範囲より外側にいる間も一定間隔でプレイヤーへ投げつけてくる。
     /// </summary>
     [RequireComponent(typeof(Target))]
     public class EnemyApproach : MonoBehaviour
@@ -40,13 +47,25 @@ namespace PocketBlaster.Gameplay
         [SerializeField] private float weaveAmplitude = 0f;
         [SerializeField] private float weaveFrequency = 0f;
 
+        [SerializeField] private bool enableRangedAttack = false;
+        [SerializeField] private float rangedAttackIntervalSeconds = 3f;
+        [SerializeField] private float rangedAttackChance = 0.5f;
+        [SerializeField] private int rangedAttackDamage = 10;
+        [SerializeField] private float rangedAttackProjectileSpeed = 6f;
+
         /// <summary>近づき過ぎて退場した瞬間に1回だけ呼ばれる。引数は自分自身。</summary>
         public event Action<Target> OnReachedPlayer;
+
+        /// <summary>遠距離攻撃がプレイヤーに命中した瞬間に呼ばれる(投擲物の飛翔後、
+        /// 着弾のタイミング)。引数はダメージ量。近づかれ過ぎた場合とは別のダメージ源
+        /// として扱う(StageDirector/MultiplayerStageDirector参照)。</summary>
+        public event Action<int> OnRangedAttackHit;
 
         private Target _target;
         private bool _hasReachedPlayer;
         private GyroReticleController _readyGate;
         private Vector3 _basePosition;
+        private float _rangedAttackTimer;
 
         private void Awake()
         {
@@ -82,6 +101,8 @@ namespace PocketBlaster.Gameplay
                 {
                     transform.position = _basePosition;
                 }
+
+                if (enableRangedAttack) UpdateRangedAttack();
             }
 
             if (Vector3.Distance(_basePosition, player.position) <= damageRange)
@@ -90,6 +111,23 @@ namespace PocketBlaster.Gameplay
                 gameObject.SetActive(false);
                 OnReachedPlayer?.Invoke(_target);
             }
+        }
+
+        private void UpdateRangedAttack()
+        {
+            _rangedAttackTimer += Time.deltaTime;
+            if (_rangedAttackTimer < rangedAttackIntervalSeconds) return;
+            _rangedAttackTimer = 0f;
+
+            // 接触範囲より内側にいる時は近づかれ過ぎたダメージだけで十分なので
+            // 遠距離攻撃は撃たない(同時に二重でダメージが入るのを避ける)。
+            if (Vector3.Distance(_basePosition, player.position) <= damageRange) return;
+            if (UnityEngine.Random.value > rangedAttackChance) return;
+
+            var from = transform.position + Vector3.up * 0.3f;
+            var to = player.position;
+            var travelSeconds = Vector3.Distance(from, to) / Mathf.Max(rangedAttackProjectileSpeed, 0.01f);
+            EnemyProjectileEffect.Launch(from, to, travelSeconds, () => OnRangedAttackHit?.Invoke(rangedAttackDamage));
         }
     }
 }

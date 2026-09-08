@@ -17,6 +17,32 @@ Start-Process -FilePath "<Unity.exeのパス>" -ArgumentList @('-projectPath', '
 Editor.logの`[PendingSceneOpener] マーカーに従ってシーンを開きました: ...`で
 実際に開けたか確認できる（`grep -n PendingSceneOpener` で探す）。
 
+## 競合ゲームとの機能・UI/UX比較 — 第5弾: 敵の遠距離攻撃（2026-09-08）
+
+「近づかれ過ぎた」の一種類しか脅威が無く単調、という指摘に対応した。
+
+- `EnemyApproach`に`enableRangedAttack`(既定false)を追加。オンの敵は接触範囲の
+  外にいる間、一定間隔(既定3秒・50%の確率)で投擲物を投げる。
+- `EnemyFactory`の`VegetableProfile`にも`EnableRangedAttack`を追加し、**足の遅い
+  オニオン・パンプキンボスにだけ**付与した——「見た目に反して脅威度が高い型」という
+  既存のオニオンの性格付け(遅いが硬い)をそのまま延長する形。トマト・キャロットは
+  俊敏さで既に脅威なので付与していない。
+- `EnemyProjectileEffect`(新規、`ScorePopupEffect`/`ScorePopupBehaviour`と同じ
+  「static Effect + internal Behaviour」分割)が投擲物の見た目(Pickupと同じ手続き
+  生成の円形スプライト)と飛翔を担当。**投擲物自体もIShootable**にした——回避手段
+  無しで一方的に被弾するのは理不尽なので、着弾前に狙って撃ち落とせるようにした
+  (最初はこの対処のしようが無い設計で書いたが、実装しながら「これは理不尽だ」と
+  気づいて追加した——docs/decisions等への記録は無いその場の判断)。
+- ダメージ経路は`EnemyApproach.OnRangedAttackHit(int damage)`→
+  `StageDirector`/`MultiplayerStageDirector`→`GameSession`(理由文言「遠距離攻撃」、
+  「敵の接近」とは別枠)。ウェーブの残り数には影響しない(敵はまだ生きているため)。
+- **確認方法**: EditMode 83件全て通過。`EnemyApproach`に新規`[SerializeField]`
+  (enableRangedAttack等)が増えたため、approaches:trueの敵を持つ3シーン
+  (Milestone4_Stage・Stage2_BossRush・MultiplayerCoop)を再ビルドし、
+  `enableRangedAttack: 1`の出現数が各シーンのオニオン+ボスの頭数と一致することを
+  確認した(Milestone4: 4件、Stage2: 4件、MultiplayerCoop: 3件)。**実機での
+  間隔・飛翔速度・撃ち落としやすさは未確認**。
+
 ## 競合ゲームとの機能・UI/UX比較 — 第4弾: BGM新設（2026-09-08）
 
 「機能・UI/UXの比較」で最大の欠落としていたBGMに着手した。`~/AIFiles`の

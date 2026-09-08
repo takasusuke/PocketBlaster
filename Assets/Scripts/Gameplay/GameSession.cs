@@ -97,6 +97,7 @@ namespace PocketBlaster.Gameplay
             if (stageDirector != null)
             {
                 stageDirector.OnEnemyReachedPlayer += HandleEnemyReachedPlayer;
+                stageDirector.OnEnemyRangedAttackHit += HandleEnemyRangedAttackHit;
                 stageDirector.OnHealthPickupCollected += HandleHealthPickupCollected;
             }
             if (playerLocomotion != null) playerLocomotion.OnFallDamage += HandleFallDamage;
@@ -116,6 +117,7 @@ namespace PocketBlaster.Gameplay
             if (stageDirector != null)
             {
                 stageDirector.OnEnemyReachedPlayer -= HandleEnemyReachedPlayer;
+                stageDirector.OnEnemyRangedAttackHit -= HandleEnemyRangedAttackHit;
                 stageDirector.OnHealthPickupCollected -= HandleHealthPickupCollected;
             }
             if (playerLocomotion != null) playerLocomotion.OnFallDamage -= HandleFallDamage;
@@ -157,6 +159,13 @@ namespace PocketBlaster.Gameplay
         private void HandleEnemyReachedPlayer()
         {
             TakeDamage(enemyContactDamage, "敵の接近");
+        }
+
+        /// <summary>敵の遠距離攻撃(オーナー要望2026-09-08、EnemyApproach.
+        /// OnRangedAttackHit参照)。「近づかれ過ぎた」とは別の理由文言で表示する。</summary>
+        private void HandleEnemyRangedAttackHit(int damage)
+        {
+            TakeDamage(damage, "遠距離攻撃");
         }
 
         /// <summary>
